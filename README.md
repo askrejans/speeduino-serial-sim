@@ -1,6 +1,6 @@
 # Speeduino Serial Simulator
 
-This Arduino sketch provides a basic simulation of a Speeduino ECU serial interface, generating and transmitting simulated real-time engine status data. The simulation includes a simplified engine model and supports the 'A' command for real-time data.
+This Arduino sketch provides a basic simulation of a Speeduino ECU serial interface, generating and transmitting simulated real-time engine status data. The simulation includes a simplified engine model and supports the 'A' command for real-time data. This solution could be useful when quickly testing logging, gauge or other Speeduino ECU implementations without the ECU itself. Hopefully more detailed serial interface simulation will be added in future releases.
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
