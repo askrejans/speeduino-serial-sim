@@ -1,7 +1,7 @@
 #include "ecu/EngineStatus.h"
 #include "ecu/EngineSimulation.cpp"
 
-// Constants for serial communication and engine simulation
+// Constants for serial communication
 #define SERIAL_BAUD_RATE 115200
 #define COMMAND_TRIGGER 'A'
 #define SERIAL_READ_DELAY 20

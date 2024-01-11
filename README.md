@@ -14,7 +14,7 @@ Make sure you have the following tools installed before running the simulator:
 - [Arduino IDE](https://www.arduino.cc/en/Main/Software)
 
 ## Installation
-1. Clone the repository or download the `speeduino-serial-sim.ino` file.
+1. Clone the repository
 2. Open the `speeduino-serial-sim.ino` file using the Arduino IDE.
 3. Connect your Arduino board to your computer.
 4. Select the appropriate board and port in the Arduino IDE.
@@ -28,12 +28,15 @@ Make sure you have the following tools installed before running the simulator:
 ## Customization
 Feel free to customize the simulation parameters and add more features according to your needs. The key parts of the code for customization are:
 
-- The `RealTimeStatus` struct: Modify this structure to include or exclude specific engine parameters.
-- The `generateSimulatedEngineData` function: Adjust the simulation logic to better match your requirements.
+- The `EngineStatus` struct: Modify this structure to include or exclude specific engine parameters.
+- The `EngineSimulation.cpp` class: Adjust the simulation logic to better match your requirements.
 - The baud rate: You can change the baud rate by modifying the `SERIAL_BAUD_RATE` constant.
 
 ## Compatibility
-This simulator is a basic implementation and has not been tested for compatibility with a real Speeduino ECU system. It currently supports only the 'A' command for basic real-time data. Use it for educational or testing purposes only.
+This simulator is a basic implementation and just barely been tested for compatibility with a real Speeduino ECU system. It currently supports only the 'A' command for basic real-time data.
+
+## Use cases
+Can be used together with [gps-to-mqtt](https://github.com/askrejans/gps-to-mqtt) project to generate test data and [golf86-info](https://github.com/askrejans/golf86-info) to display in on LED matrix display. This was the original use case that this was created for: to test pushing parameters to MQTT and display without physical ECU.
 
 ## License
 This project is licensed under the [MIT License](LICENSE). Feel free to modify and distribute it as needed.
