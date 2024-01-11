@@ -36,7 +36,7 @@ Feel free to customize the simulation parameters and add more features according
 This simulator is a basic implementation and just barely been tested for compatibility with a real Speeduino ECU system. It currently supports only the 'A' command for basic real-time data.
 
 ## Use cases
-Can be used together with [gps-to-mqtt](https://github.com/askrejans/gps-to-mqtt) project to generate test data and [golf86-info](https://github.com/askrejans/golf86-info) to display in on LED matrix display. This was the original use case that this was created for: to test pushing parameters to MQTT and display without physical ECU.
+Can be used together with [speeduino-to-mqtt](https://github.com/askrejans/speeduino-to-mqtt) project to generate test data and [golf86-info](https://github.com/askrejans/golf86-info) to display in on LED matrix display. This was the original use case that this was created for: to test pushing parameters to MQTT and display without physical ECU.
 
 ## License
 This project is licensed under the [MIT License](LICENSE). Feel free to modify and distribute it as needed.
