@@ -1,24 +1,28 @@
-#include "ecu/EngineStatus.h"        // Include the header file containing the EngineStatus struct
-#include "ecu/EngineSimulation.cpp"  // Include the implementation file for engine simulation
+#include "ecu/EngineStatus.h"
+#include "ecu/EngineSimulation.cpp"
 
+// Constants for serial communication and engine simulation
 #define SERIAL_BAUD_RATE 115200
+#define COMMAND_TRIGGER 'A'
+#define SERIAL_READ_DELAY 20
 
-EngineStatus engineStatus;  // Global variable to hold real-time engine status
+// Global variable to hold real-time engine status
+EngineStatus engineStatus;
 
 /**
- * @brief Setup function executed once at program start
+ * @brief Setup function executed once at program start.
  * 
- * Initialize serial communication and engine status.
+ * Initializes serial communication and engine status.
  */
 void setup() {
-  Serial.begin(SERIAL_BAUD_RATE);        // Initialize serial communication
-  initializeEngineStatus(engineStatus);  // Initialize the engine status
+  Serial.begin(SERIAL_BAUD_RATE);
+  initializeEngineStatus(engineStatus);
 }
 
 /**
- * @brief Loop function executed repeatedly
+ * @brief Loop function executed repeatedly.
  * 
- * Listen for commands from the serial port and respond with simulated engine data.
+ * Listens for commands from the serial port and responds with simulated engine data.
  * Uses the 'A' command to trigger data generation.
  */
 void loop() {
@@ -52,10 +56,11 @@ void loop() {
   // Send simulated engine data
   if (Serial.available() > 0) {
     char command = Serial.read();
-    if (command == 'A') {
+    if (command == COMMAND_TRIGGER) {
+      generateSimulatedEngineData(engineStatus);
       Serial.write((uint8_t*)&engineStatus, sizeof(engineStatus));
     }
   }
 
-  delay(20);
+  delay(SERIAL_READ_DELAY);
 }
