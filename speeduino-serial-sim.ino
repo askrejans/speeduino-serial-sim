@@ -4,7 +4,6 @@
 // Constants for serial communication
 #define SERIAL_BAUD_RATE 115200
 #define COMMAND_TRIGGER 'A'
-#define SERIAL_READ_DELAY 20
 
 // Global variable to hold real-time engine status
 EngineStatus engineStatus;
@@ -61,6 +60,4 @@ void loop() {
       Serial.write((uint8_t*)&engineStatus, sizeof(engineStatus));
     }
   }
-
-  delay(SERIAL_READ_DELAY);
 }
