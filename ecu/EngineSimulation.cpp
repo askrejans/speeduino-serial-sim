@@ -1,19 +1,34 @@
 #include "EngineStatus.h"
+#include <Arduino.h>
 
 // Constants for simulation
 #define IDLE_RPM 800
-#define MAX_RPM 5000
+#define MAX_RPM 7000
 #define RPM_CHANGE_INTERVAL 5000  // Time interval for RPM change in milliseconds
 
-void simulateParameters(EngineStatus& engineStatus) {
-  // Simulate temperature increase with RPM
-  engineStatus.iat = map(engineStatus.rpmhi, IDLE_RPM, MAX_RPM, 30, 80);
+enum EngineMode {
+  STARTUP,
+  IDLING,
+  ACCELERATION,
+  HIGH_RPM,
+  DECELERATION
+};
 
-  // Simulate RPM-dependent parameters
-  engineStatus.rpmdotlo = map(engineStatus.rpmhi, IDLE_RPM, MAX_RPM, 0, 500);
-  engineStatus.rpmdothi = map(engineStatus.rpmhi, IDLE_RPM, MAX_RPM, 0, 500);
-  engineStatus.ve = map(engineStatus.rpmhi, IDLE_RPM, MAX_RPM, 80, 120);
-  engineStatus.tps = map(engineStatus.rpmhi, IDLE_RPM, MAX_RPM, 0, 100);
+void simulateParameters(EngineStatus& engineStatus) {
+  // Simulate temperature increase with RPM using a quadratic curve
+  engineStatus.iat = 30 + 0.00001 * pow(engineStatus.rpmhi, 2);
+
+  // Simulate RPM-dependent parameters using more advanced curves
+  engineStatus.rpmdotlo = 0.1 * engineStatus.rpmhi;
+  engineStatus.rpmdothi = 0.1 * engineStatus.rpmhi;
+  engineStatus.ve = 80 + 0.00002 * pow(engineStatus.rpmhi, 2);
+  engineStatus.tps = 0.01 * engineStatus.rpmhi;
+  engineStatus.batteryv = 12 + 0.0003 * engineStatus.rpmhi;
+  engineStatus.maplo = 80 + 0.00002 * pow(engineStatus.rpmhi, 2);
+  engineStatus.maphi = 80 + 0.00002 * pow(engineStatus.rpmhi, 2);
+  engineStatus.spark = 0.036 * engineStatus.rpmhi;
+  engineStatus.advance = 10 + 0.002 * engineStatus.rpmhi;
+  engineStatus.dwell = 10 + 0.002 * engineStatus.rpmhi;
 }
 
 void initializeEngineStatus(EngineStatus& engineStatus) {
@@ -70,68 +85,86 @@ void initializeEngineStatus(EngineStatus& engineStatus) {
 }
 
 void generateSimulatedEngineData(EngineStatus& engineStatus) {
-  // Simulate idling warmed-up engine
-  engineStatus.response = 'A';
-  engineStatus.secl = (byte)(millis() / 1000);
+  static unsigned long lastUpdateTime = 0;
+  static EngineMode mode = STARTUP;
+  unsigned long currentTime = millis();
+  unsigned long elapsedTime = currentTime - lastUpdateTime;
 
-  // Simulate random engine parameter variations
-  engineStatus.rpmlo = random(0, 20);
-  engineStatus.rpmhi = random(120, 140);
-  engineStatus.tps = random(0, 5);
-  engineStatus.idleload = random(80, 100);
-  engineStatus.advance = 10;
+  if (elapsedTime >= RPM_CHANGE_INTERVAL) {
+    lastUpdateTime = currentTime;
 
-  // Reset flags and status
-  engineStatus.status1 = 0;
-  engineStatus.engine = 1;
-  engineStatus.spark = 0;
-  engineStatus.testoutputs = 0;
+    // Simulate engine startup, idling, acceleration, high RPM, and deceleration
+    switch (mode) {
+      case STARTUP:
+        engineStatus.rpmhi = random(800, 1200);
+        engineStatus.clt = random(30, 50); // Cold start temperature
+        mode = IDLING;
+        break;
+      case IDLING:
+        engineStatus.rpmhi = random(800, 1000);
+        engineStatus.clt = random(50, 70); // Warming up
+        if (engineStatus.clt > 60) {
+          mode = ACCELERATION;
+        }
+        break;
+      case ACCELERATION:
+        engineStatus.rpmhi = random(1000, 3000);
+        engineStatus.clt = random(70, 90); // Normal operating temperature
+        if (engineStatus.rpmhi > 2500) {
+          mode = HIGH_RPM;
+        }
+        break;
+      case HIGH_RPM:
+        engineStatus.rpmhi = random(3000, 7000);
+        engineStatus.clt = random(80, 100); // High load temperature
+        if (engineStatus.rpmhi < 3500) {
+          mode = DECELERATION;
+        }
+        break;
+      case DECELERATION:
+        engineStatus.rpmhi = random(1000, 3000);
+        engineStatus.clt = random(70, 90); // Cooling down
+        if (engineStatus.rpmhi < 1500) {
+          mode = IDLING;
+        }
+        break;
+    }
 
-  // Simulate random values for other engine parameters
-  engineStatus.dwell = (byte)(random(5, 25) * 10);
-  engineStatus.maplo = random(80, 120);
-  engineStatus.maphi = 0;
-  engineStatus.iat = random(30, 50);
-  engineStatus.clt = random(70, 90);
-  engineStatus.batcorrection = random(120, 140);
-  engineStatus.batteryv = (byte)(random(1200, 1400) / 10.0);
-  engineStatus.o2 = (byte)(random(900, 1300) / 10.0);
-  engineStatus.egocorrection = random(120, 140);
-  engineStatus.iatcorrection = random(120, 140);
-  engineStatus.wue = random(120, 140);
-  engineStatus.taeamount = random(120, 140);
-  engineStatus.gammae = random(120, 140);
-  engineStatus.ve = random(120, 140);
-  engineStatus.afrtarget = random(120, 140);
-  engineStatus.pw1lo = random(120, 140);
-  engineStatus.pw1hi = random(120, 140);
-  engineStatus.tpsdot = random(120, 140);
-  engineStatus.advance = random(18, 22);
-  engineStatus.tps = random(0, 100);
-  engineStatus.loopslo = random(120, 140);
-  engineStatus.loopshi = random(120, 140);
-  engineStatus.freeramlo = random(120, 140);
-  engineStatus.freeramhi = random(120, 140);
-  engineStatus.boosttarget = random(120, 140);
-  engineStatus.boostduty = random(120, 140);
-  engineStatus.spark = random(0, 255);
-  engineStatus.rpmdotlo = random(0, 500);
-  engineStatus.rpmdothi = random(0, 500);
-  engineStatus.ethanolpct = random(120, 140);
-  engineStatus.flexcorrection = random(120, 140);
-  engineStatus.flexigncorrection = random(120, 140);
-  engineStatus.idleload = random(120, 140);
-  engineStatus.testoutputs = random(0, 255);
-  engineStatus.o2_2 = random(120, 140);
-  engineStatus.baro = random(120, 140);
+    // Simulate other engine parameters based on RPM and mode
+    engineStatus.tps = 0.01 * engineStatus.rpmhi;
+    engineStatus.idleload = 80 + 0.00002 * pow(engineStatus.rpmhi, 2);
+    engineStatus.advance = 10 + 0.002 * engineStatus.rpmhi;
+    engineStatus.dwell = 10 + 0.002 * engineStatus.rpmhi;
+    engineStatus.maplo = 80 + 0.00002 * pow(engineStatus.rpmhi, 2);
+    engineStatus.maphi = 80 + 0.00002 * pow(engineStatus.rpmhi, 2);
+    engineStatus.batteryv = 12 + 0.0003 * engineStatus.rpmhi;
+    engineStatus.o2 = 0.9 + 0.00005 * engineStatus.rpmhi;
+    engineStatus.ve = 80 + 0.00002 * pow(engineStatus.rpmhi, 2);
+    engineStatus.afrtarget = 14 - 0.0003 * engineStatus.rpmhi;
+    engineStatus.pw1lo = 1 + 0.0005 * engineStatus.rpmhi;
+    engineStatus.pw1hi = 5 + 0.0005 * engineStatus.rpmhi;
+    engineStatus.tpsdot = 0.01 * engineStatus.rpmhi;
+    engineStatus.boosttarget = 0.002 * engineStatus.rpmhi;
+    engineStatus.boostduty = 0.01 * engineStatus.rpmhi;
+    engineStatus.spark = 0.036 * engineStatus.rpmhi;
+    engineStatus.rpmdotlo = 0.1 * engineStatus.rpmhi;
+    engineStatus.rpmdothi = 0.1 * engineStatus.rpmhi;
+    engineStatus.ethanolpct = 0.01 * engineStatus.rpmhi;
+    engineStatus.flexcorrection = 0.01 * engineStatus.rpmhi;
+    engineStatus.flexigncorrection = 0.01 * engineStatus.rpmhi;
+    engineStatus.idleload = 80 + 0.00002 * pow(engineStatus.rpmhi, 2);
+    engineStatus.testoutputs = 0.036 * engineStatus.rpmhi;
+    engineStatus.o2_2 = 0.9 + 0.00005 * engineStatus.rpmhi;
+    engineStatus.baro = 100 + 0.0001 * engineStatus.rpmhi;
 
-  // Simulate random values for CAN input data
-  for (int i = 0; i < 16; i++) {
-    engineStatus.canin[i] = random(120, 140);
+    // Simulate random values for CAN input data
+    for (int i = 0; i < 16; i++) {
+      engineStatus.canin[i] = random(120, 140);
+    }
+
+    engineStatus.tpsadc = random(120, 140);
+    engineStatus.errors = getNextError();
   }
-
-  engineStatus.tpsadc = random(120, 140);
-  engineStatus.errors = getNextError();
 }
 
 byte getNextError() {
