@@ -1,4 +1,4 @@
-# Speeduino Serial Simulator - Production Ready v2.0
+# Speeduino Serial Simulator - v2.0.0
 
 A cross-platform Speeduino ECU serial interface simulator with realistic I4 engine simulation, supporting Arduino AVR, ESP32, and ESP8266. Tested more on ESP32 for now.
 
