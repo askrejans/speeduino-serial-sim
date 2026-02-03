@@ -192,7 +192,6 @@ MIT License - See [LICENSE](LICENSE)
 
 ## 📧 Contact
 
-- **Author**: Arvis Krējāns
 - **GitHub**: [@askrejans](https://github.com/askrejans)
 
 ---
