@@ -63,6 +63,12 @@ void setup() {
     // Initialize serial communication
     serialInterface->begin(SERIAL_BAUD_RATE);
     
+    // When using WiFi serial, the hardware UART is used for monitoring/logging
+    // and must be initialized separately since serialInterface is a TCP socket
+    #if defined(ENABLE_WIFI) && defined(ENABLE_WIFI_SERIAL)
+        Serial.begin(SERIAL_BAUD_RATE);
+    #endif
+    
     // Wait for serial to be ready (important for USB serial)
     #ifdef ARDUINO_AVR
         delay(100);  // Short delay for AVR
@@ -115,6 +121,11 @@ void setup() {
         }
     #endif
     
+    #if defined(ENABLE_WIFI) && defined(ENABLE_WIFI_SERIAL)
+        Serial.print("WiFi serial listening on TCP port ");
+        Serial.println(WIFI_SERIAL_PORT);
+    #endif
+
     Serial.println("\nSimulator started!");
     Serial.println("Waiting for commands on serial port...\n");
     
