@@ -1,4 +1,4 @@
-# Speeduino Serial Simulator - v2.0.0
+# Speeduino Serial Simulator - v2.1.0
 
 A cross-platform Speeduino ECU serial interface simulator with realistic I4 engine simulation, supporting Arduino AVR, ESP32, and ESP8266. Tested more on ESP32 for now.
 
@@ -24,6 +24,30 @@ A cross-platform Speeduino ECU serial interface simulator with realistic I4 engi
 - Real-time parameter monitoring
 - Remote control via REST API
 - mDNS support (speeduino-sim.local)
+- WiFi Serial Socket (ESP32-S3 default): TCP/IP serial communication on port 5000
+
+### WiFi Serial Socket (NEW in v2.1.0)
+
+The feature enables serial communication over TCP/IP instead of hardware UART. This allows remote applications to connect over the network.
+
+**Enabling WiFi Serial:**
+- Add `-D ENABLE_WIFI_SERIAL` to your build flags in [platformio.ini](platformio.ini#L119)
+- Enabled by default on ESP32-S3
+- Available on all ESP32 and ESP8266 builds
+
+**Usage:**
+1. Build and flash with WiFi serial enabled
+2. Connect to WiFi AP "SpeeduinoSim" (password: `speeduino123`)
+3. Note the device IP address (shown in serial monitor or web dashboard)
+4. Configure your serial application to connect to `<IP>:5000` via TCP/IP
+   - **TunerStudio**: Use TCP/IP connection type instead of COM port
+   - **Custom tools**: Connect TCP socket to port 5000
+
+**How it works:**
+- Hardware UART (Serial) is used for debug logging/monitoring
+- TCP socket on port 5000 handles Speeduino protocol commands
+- Web interface remains on port 80 (HTTP)
+- Simultaneous web dashboard + remote serial access
 
 ## 📋 Requirements
 
@@ -89,11 +113,30 @@ screen /dev/ttyUSB0 115200
 
 ### Web Interface (ESP32/ESP8266 Only)
 
+**Default Access (First Boot):**
 1. **Power on device** - Creates WiFi AP "SpeeduinoSim"
 2. **Connect** with password: `speeduino123`
-3. **Open browser** to `http://192.168.4.1`
+3. **Open browser** to `http://192.168.4.1` (port 80)
 4. **Monitor** real-time engine parameters
 5. **Control** simulation mode (Idle, Acceleration, WOT, etc.)
+
+**WiFi Configuration:**
+The device supports two WiFi modes with automatic fallback:
+- **Access Point (AP) Mode**: Default mode, creates its own network at 192.168.4.1
+- **Station (STA) Mode**: Connects to your existing WiFi network
+
+To configure WiFi:
+1. Access the web interface at `http://192.168.4.1` in AP mode
+2. Click "WiFi Settings" button
+3. Scan for available networks or manually enter SSID
+4. Enter password and enable "Station Mode"
+5. Restart the device
+6. If connection fails, device automatically falls back to AP mode
+7. Find new IP address from serial monitor or connect to AP and check settings
+
+**Ports:**
+- **80**: HTTP web dashboard
+- **5000**: Speeduino serial protocol (if ENABLE_WIFI_SERIAL is defined)
 
 #### REST API Endpoints
 
@@ -106,21 +149,60 @@ curl http://192.168.4.1/api/status
 
 # Set engine mode
 curl -X POST http://192.168.4.1/api/setmode -d "mode=wot"
+
+# Available modes: idle, light_load, acceleration, high_rpm, wot
+
+# WiFi configuration endpoints
+curl http://192.168.4.1/api/wifi/scan
+curl -X POST http://192.168.4.1/api/wifi/save -d "ssid=MyNetwork&password=mypass&enable=true"
+curl -X POST http://192.168.4.1/api/wifi/reset
+curl -X POST http://192.168.4.1/api/restart
 ```
 
-Available modes: `idle`, `light_load`, `acceleration`, `high_rpm`, `wot`
+### Testing WiFi Serial (TCP Socket on Port 5000)
+
+When `ENABLE_WIFI_SERIAL` is defined, you can test Speeduino protocol commands over TCP:
+
+```bash
+# Using netcat (nc)
+nc 192.168.4.1 5000
+# Then type commands: A, V, Q, S, n
+
+# Using telnet
+telnet 192.168.4.1 5000
+# Then type commands
+
+# Test with echo and nc (send 'A' command)
+echo -n "A" | nc 192.168.4.1 5000 | xxd
+
+# Test version command
+echo -n "V" | nc 192.168.4.1 5000
+
+# Continuous real-time data (send 'A' every second)
+while true; do echo -n "A" | nc 192.168.4.1 5000 | xxd -l 79; sleep 1; done
+```
 
 ## 🧪 Testing
 
-```bash
-# Run all tests
-pio test -e uno
-pio test -e esp32
+### Unit Tests
 
-# Specific test suites
-pio test -e uno --filter test_engine_simulator
-pio test -e uno --filter test_protocol
+Run comprehensive embedded tests (40+ test cases):
+
+```bash
+# Run all tests on ESP32-S3 (includes WiFi/TCP tests)
+platformio test -e esp32s3 --upload-port /dev/cu.usbmodem11101 --test-port /dev/cu.usbmodem11101
+
+# Run on ESP32-S2 (WiFi tests, no serial socket)
+platformio test -e esp32s2
+
+# Run on Arduino Uno (basic tests only)
+platformio test -e uno
+
+# Verbose output for debugging
+platformio test -e esp32s3 -vvv
 ```
+
+See [test/README.md](test/README.md) for detailed test documentation.
 
 ## 📊 Engine Simulation
 
@@ -196,5 +278,7 @@ MIT License - See [LICENSE](LICENSE)
 
 ---
 
-**Version**: 2.0.0
-**Major Changes from v1.0**: Complete rewrite with realistic physics, multi-platform support, web interface, comprehensive tests
+**Version**: 2.1.0
+**Major Changes**:
+- **v2.1.0**: WiFi serial socket support (TCP/IP alternative to hardware UART), WiFi station mode added
+- **v2.0.0**: Complete rewrite with realistic physics, multi-platform support, web interface, comprehensive tests

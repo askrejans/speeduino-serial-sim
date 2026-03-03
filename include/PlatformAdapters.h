@@ -26,18 +26,39 @@
 
 class ArduinoSerialAdapter : public ISerialInterface {
 private:
-    HardwareSerial* serial;
+    Stream* serial;
+    uint32_t baudRate;
     
 public:
-    explicit ArduinoSerialAdapter(HardwareSerial* serialPort = &Serial) 
-        : serial(serialPort) {}
+    // Use Stream base class to support both HardwareSerial and HWCDC (ESP32-S3 USB)
+    explicit ArduinoSerialAdapter(Stream* serialPort = &Serial) 
+        : serial(serialPort), baudRate(0) {}
     
-    void begin(uint32_t baudRate) override {
-        serial->begin(baudRate);
-        // Wait for serial port to be ready
-        while (!serial) {
-            ; // Wait for serial port to connect
-        }
+    void begin(uint32_t baud) override {
+        baudRate = baud;
+        
+        // Begin serial based on platform type
+        #if defined(ESP32)
+            // On ESP32-S3 with USB CDC, Serial is HWCDC which has begin()
+            // On other ESP32s, Serial is HardwareSerial
+            #if defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
+                // USB CDC mode - serial is already initialized
+                Serial.begin(baud);
+            #else
+                // Standard UART mode
+                if (serial == &Serial) {
+                    Serial.begin(baud);
+                } else {
+                    ((HardwareSerial*)serial)->begin(baud);
+                }
+            #endif
+        #else
+            // Standard Arduino - assume HardwareSerial
+            ((HardwareSerial*)serial)->begin(baud);
+        #endif
+        
+        // Short delay to allow serial to stabilize
+        delay(100);
     }
     
     bool isReady() override {

@@ -60,20 +60,30 @@ void setup() {
     timeProvider = createTimeProvider();
     randomProvider = createRandomProvider();
     
-    // Initialize serial communication
-    serialInterface->begin(SERIAL_BAUD_RATE);
-    
-    // When using WiFi serial, the hardware UART is used for monitoring/logging
-    // and must be initialized separately since serialInterface is a TCP socket
-    #if defined(ENABLE_WIFI) && defined(ENABLE_WIFI_SERIAL)
+    // Initialize hardware serial for debugging (always needed for ESP32/ESP8266)
+    #if defined(ESP32) || defined(ESP8266)
         Serial.begin(SERIAL_BAUD_RATE);
+        // Wait for USB CDC to be ready on ESP32-S3
+        #ifdef ESP32
+            delay(1000);
+        #else
+            delay(500);
+        #endif
+        
+        // Early boot diagnostic
+        Serial.println("\n\n*** BOOT START ***");
+        #ifdef ESP32
+            Serial.print("Reset reason: ");
+            Serial.println(esp_reset_reason());
+        #endif
     #endif
+    
+    // Initialize serial communication interface
+    serialInterface->begin(SERIAL_BAUD_RATE);
     
     // Wait for serial to be ready (important for USB serial)
     #ifdef ARDUINO_AVR
         delay(100);  // Short delay for AVR
-    #else
-        delay(1000);  // Longer delay for ESP32/ESP8266
     #endif
     
     // Print startup banner
@@ -111,11 +121,14 @@ void setup() {
         Serial.println("Initializing web interface...");
         webInterface = new WebInterface(engineSimulator, protocol);
         
-        // Start in AP mode for easy access
-        if (webInterface->begin(true)) {
+        // Auto-detect mode: tries station if configured, falls back to AP
+        if (webInterface->begin()) {
             Serial.println("✓ Web interface ready");
+            Serial.print("WiFi Mode: ");
+            Serial.println(webInterface->isAccessPointMode() ? "Access Point" : "Station");
             Serial.print("Access at: http://");
             Serial.println(webInterface->getIP());
+            Serial.println("Configure WiFi at: http://" + webInterface->getIP().toString() + "/wifi");
         } else {
             Serial.println("✗ Web interface failed");
         }

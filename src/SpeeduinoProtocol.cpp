@@ -47,7 +47,7 @@ bool SpeeduinoProtocol::processCommands() {
     char command = (char)cmdByte;
     commandCount++;
     
-    MONITOR_LOGF("[CMD] '%c' (0x%02X) #%lu\n", 
+    MONITOR_LOGF("[CMD] '%c' (0x%02X) #%u\n", 
                  (command >= 0x20 && command < 0x7F) ? command : '.', 
                  (uint8_t)command, commandCount);
     

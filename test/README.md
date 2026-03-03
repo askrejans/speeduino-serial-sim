@@ -6,7 +6,56 @@ The Speeduino Serial Simulator includes comprehensive embedded unit tests using 
 
 ## Test File
 
-- `test_embedded.cpp` - Comprehensive tests for EngineSimulator and SpeeduinoProtocol (16 test cases)
+- `test_embedded.cpp` - Comprehensive tests for EngineSimulator, SpeeduinoProtocol, WiFiSerialAdapter, and WebInterface (40+ test cases)
+
+## Test Coverage
+
+### Engine Simulator Tests (15 tests)
+- Initialization and basic operation
+- RPM bounds checking
+- Temperature progression
+- MAP/throttle correlation
+- Volumetric efficiency
+- Pulse width calculation
+- Timing advance changes
+- Battery voltage stability
+- AFR target changes with load
+- TPS changes with engine mode
+- Mode transitions
+- Sensor range validation
+- Runtime tracking
+
+### Speeduino Protocol Tests (12 tests)
+- Command 'A' (realtime data)
+- Command 'V' (version)
+- Command 'Q' (status)
+- Command 'S' (signature)
+- Command 'n' (page sizes)
+- Unknown command handling
+- Command counter
+- Multiple command sequences
+- Response format validation
+- Error handling
+
+### WiFi Serial Adapter Tests (7 tests) - ESP32/ESP8266 only
+- TCP socket adapter creation
+- Begin/initialization without crash
+- Ready status without client
+- Available bytes check
+- Read operations without data
+- Write operations without client
+- Protocol integration with WiFi serial
+
+### Web Interface Tests (4 tests) - ESP32/ESP8266 only
+- Web interface object creation
+- Server initialization (begin)
+- IP address retrieval
+- AP mode detection
+
+### Integration Tests (3 tests)
+- Full simulation cycle with commands
+- Rapid command processing
+- All modes stability testing
 
 ## Running Tests
 
@@ -15,85 +64,82 @@ The Speeduino Serial Simulator includes comprehensive embedded unit tests using 
 - PlatformIO installed
 - Correct serial port permissions
 
+### Run Tests on ESP32-S3 (Full Test Suite)
+
+```bash
+# Upload and run all tests (includes WiFi/network tests)
+platformio test -e esp32s3
+
+# Verbose output
+platformio test -e esp32s3 -vvv
+
+# Specify serial port
+platformio test -e esp32s3 --upload-port /dev/cu.usbmodem11101 --test-port /dev/cu.usbmodem11101
+```
+
+**Note:** ESP32-S3 environment runs the complete test suite including WiFi Serial Adapter and Web Interface tests (41 tests total).
+
 ### Run Tests on ESP32-S2
 
 ```bash
-# Upload and run tests
-pio test -e esp32s2
+# Upload and run tests (includes web interface tests, no WiFi serial)
+platformio test -e esp32s2
 
 # Verbose output
-pio test -e esp32s2 -vvv
+platformio test -e esp32s2 -vvv
 
 # Specify serial port
-pio test -e esp32s2 --upload-port /dev/cu.usbserial-11410 --test-port /dev/cu.usbserial-11410
+platformio test -e esp32s2 --upload-port /dev/cu.usbserial-11410 --test-port /dev/cu.usbserial-11410
 ```
+
+**Note:** ESP32-S2 runs 34 tests (WiFi Serial Adapter tests excluded, Web Interface tests included).
+
+### Run Tests on Arduino (Basic Tests Only)
+
+```bash
+# Arduino Mega (recommended for AVR platform testing)
+platformio test -e mega
+
+# Arduino Uno (minimal memory, may struggle with full test suite)
+platformio test -e uno
+```
+
+**Note:** Arduino AVR platforms run 30 tests only (no WiFi/web tests).
 
 ### Run Tests on Other Platforms
 
 ```bash
-# ESP32
-pio test -e esp32
+# ESP32 (full WiFi tests)
+platformio test -e esp32
 
-# ESP32-S3
-pio test -e esp32s3
-
-# ESP8266
-pio test -e esp8266
-
-# Arduino Mega (has more memory than Uno)
-pio test -e mega
-```
-
-## Test Coverage
-
-### Engine Simulator Tests (8 tests)
-- `test_simulator_initialization` - Verify initial state
-- `test_rpm_stays_within_bounds` - RPM limits validation
-- `test_startup_to_warmup` - State machine transitions
-- `test_coolant_temperature_increases` - Thermal simulation
-- `test_map_correlates_with_throttle` - MAP/throttle correlation
-- `test_volumetric_efficiency` - VE calculation range
-- `test_engine_status_size` - Structure size validation (79 bytes)
-- `test_runtime_tracking` - Runtime counter accuracy
-
-### Protocol Tests (8 tests)
-- `test_command_A_realtime_data` - 'A' command (79-byte response)
-- `test_command_V_version` - 'V' command (version string)
-- `test_command_Q_status` - 'Q' command (4-byte status)
-- `test_command_S_signature` - 'S' command (20-byte signature)
-- `test_command_n_page_sizes` - 'n' command (page sizes)
-- `test_unknown_command` - Error handling for invalid commands
-- `test_command_counter` - Command statistics tracking
-- `test_no_command_available` - Empty buffer handling
-
-## Test Output
-
-Successful test run output:
-```
-Testing...
---------------------------------------------------------------------
-test_simulator_initialization    [PASSED]
-test_rpm_stays_within_bounds      [PASSED]
-test_startup_to_warmup            [PASSED]
-test_coolant_temperature_increases [PASSED]
-test_map_correlates_with_throttle  [PASSED]
-test_volumetric_efficiency        [PASSED]
-test_engine_status_size           [PASSED]
-test_runtime_tracking             [PASSED]
-test_command_A_realtime_data      [PASSED]
-test_command_V_version            [PASSED]
-test_command_Q_status             [PASSED]
-test_command_S_signature          [PASSED]
-test_command_n_page_sizes         [PASSED]
-test_unknown_command              [PASSED]
-test_command_counter              [PASSED]
-test_no_command_available         [PASSED]
---------------------------------------------------------------------
-16 Tests 0 Failures 0 Ignored
-OK
+# ESP8266 (full WiFi tests)platformio test -e esp8266
 ```
 
 ## Troubleshooting
+
+### Upload Failed on ESP32-S3
+
+If you see `*** [upload] Error 1` or `*** [upload] Error 2`:
+
+**Method 1: Reset to bootloader mode**
+1. Hold down the **BOOT** button (or **B** button) on the ESP32-S3
+2. While holding BOOT, press and release the **RESET** button (or **R** button)
+3. Release the BOOT button
+4. Immediately run: `platformio test -e esp32s3`
+
+**Method 2: Use esptool directly**
+```bash
+# Check if device is detected
+platformio device list
+
+# Try manual upload with reset
+platformio test -e esp32s3 --upload-port /dev/cu.usbmodem11101 --test-port /dev/cu.usbmodem11101
+```
+
+**Method 3: Change USB connection**
+- Try a different USB cable (must support data, not just power)
+- Try a different USB port on your computer
+- Some USB-C hubs cause issues - try direct connection
 
 ### Port Permission Denied
 ```bash
@@ -119,10 +165,6 @@ sudo usermod -a -G dialout $USER
 - Arduino AVR boards may not have enough RAM for tests
 - Use ESP32, ESP8266, or Arduino Mega for testing
 - Uno/Nano are build-only environments
-
-## CI/CD Integration
-
-For GitHub Actions or other CI systems, hardware-based tests require self-hosted runners with connected devices. See `.github/workflows/ci.yml` for example configuration.
 
 ## Adding New Tests
 
