@@ -116,7 +116,7 @@
 
   // WiFi Serial (TCP socket as serial replacement)
   // Define ENABLE_WIFI_SERIAL to use a TCP socket instead of HW UART
-  #define ENABLE_WIFI_SERIAL
+  //#define ENABLE_WIFI_SERIAL
   #define WIFI_SERIAL_PORT 5000   // TCP port for serial-over-WiFi
 #endif
 
