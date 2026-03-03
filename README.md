@@ -178,8 +178,8 @@ echo -n "A" | nc 192.168.4.1 5000 | xxd
 # Test version command
 echo -n "V" | nc 192.168.4.1 5000
 
-# Continuous real-time data (send 'A' every second)
-while true; do echo -n "A" | nc 192.168.4.1 5000 | xxd -l 79; sleep 1; done
+# Continuous real-time parsed data (send 'A' every 0.1 second)
+while true; do   ts=$(date '+%Y-%m-%d %H:%M:%S.%3N');    exec 3<>/dev/tcp/192.168.4.1/5000;   printf "A" >&3;    frame=$(dd bs=79 count=1 <&3 2>/dev/null | xxd -p -c 79);   exec 3>&-;    if [ ${#frame} -eq 158 ]; then     rpm=$(( 0x${frame:32:2}${frame:30:2} ));     echo "$ts RPM=$rpm";   else     echo "$ts BAD_FRAME";   fi;    sleep 0.1; done
 ```
 
 ## 🧪 Testing
