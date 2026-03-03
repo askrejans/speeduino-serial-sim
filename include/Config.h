@@ -17,9 +17,9 @@
 // ============================================
 // Version Information
 // ============================================
-#define FIRMWARE_VERSION "2.1.0"
+#define FIRMWARE_VERSION "2.2.0"
 #define PROTOCOL_VERSION "0.4"
-#define SPEEDUINO_SIGNATURE "speeduino 202310"
+#define SPEEDUINO_SIGNATURE "speeduino 202501"
 
 // ============================================
 // Serial Communication

@@ -1,4 +1,4 @@
-# Speeduino Serial Simulator - v2.1.0
+# Speeduino Serial Simulator - v2.2.0
 
 A cross-platform Speeduino ECU serial interface simulator with realistic I4 engine simulation, supporting Arduino AVR, ESP32, and ESP8266. Tested more on ESP32 for now.
 
@@ -6,7 +6,9 @@ A cross-platform Speeduino ECU serial interface simulator with realistic I4 engi
 
 ### Core Features
 - **Realistic Engine Simulation**: Physics-based I4 2.0L engine model with correlated parameters
-- **Speeduino Protocol Compatible**: Implements 5 most common commands (A, Q, V, S, n)
+- **Full Speeduino Protocol v2**: Implements both legacy (single-byte) and framed (CRC32) protocol used by TunerStudio
+- **Accurate Output Channels**: 130-byte `EngineStatus` struct byte layout matches Speeduino 202501 `getTSLogEntry()` exactly
+- **TunerStudio Compatible**: Connects, streams live gauge data at ~20 Hz via TCP or UART
 - **Cross-Platform**: Arduino AVR, ESP32, ESP8266
 
 ### Platform-Specific Features
@@ -88,7 +90,99 @@ The project is now PlatformIO-based. For Arduino IDE users:
 2. Rename `main.cpp` to match your sketch name
 3. Note: Web interface and advanced features require PlatformIO
 
-## 📡 Usage
+## � Speeduino Protocol Implementation
+
+The simulator implements the full **Speeduino serial protocol v2** (framed CRC32) as used by TunerStudio and compatible tools, alongside the legacy single-byte protocol used for initial handshake and other utilities.
+
+### Protocol Layers
+
+| Layer | Format | Used For |
+|-------|--------|----------|
+| **Legacy** | `[1B cmd]` → raw bytes, no framing | Initial port-check (`F`, `Q`, `S`), simple tools |
+| **Framed v2** | `[2B BE length][payload][4B BE CRC32]` | All TunerStudio communication after handshake |
+
+### TunerStudio Connection Sequence
+
+TunerStudio performs the following handshake before streaming live data:
+
+1. **Legacy `F`** → raw `"002"` — signals protocol version 2; TS switches to framed mode
+2. **Framed `C`** → `{0x00, 0xFF}` — comms test OK
+3. **Framed `Q`** → `{0x00, "speeduino 202501"}` — firmware version (must match `signature=` in the INI)
+4. **Framed `S`** → `{0x00, "Speeduino 202501"}` — product identity string
+5. **Framed `r` (sub-cmd `0x30`)** → `{0x00, outputChannels[offset..offset+len]}` — live data, repeated at ~20 Hz
+
+### Implemented Commands
+
+| Command | Mode | Description |
+|---------|------|-------------|
+| `F` | Legacy + Framed | Protocol version → `"002"` |
+| `Q` | Legacy + Framed | Firmware version string (`speeduino 202501`) |
+| `S` | Legacy + Framed | Product identity string |
+| `C` | Legacy + Framed | Comms test |
+| `V` / `v` | Legacy | Version string |
+| `A` | Legacy + Framed | Realtime data dump (full 130-byte struct) |
+| `r` | Legacy + Framed | Optimised output-channel read (offset + length) |
+| `p` | Framed | Read tune page (returns zeros — no real tune) |
+| `d` | Framed | Page CRC32 (computed from zero page) |
+| `n` | Legacy + Framed | Page count and sizes |
+| `b` / `B` | Framed | Burn to EEPROM (acknowledged, nothing written) |
+| `I` | Framed | CAN ID (`0x00`) |
+| `E` | Framed | Command button ACK |
+| `f` | Framed | Serial capability struct |
+| `X`,`O`,`J`,`H` | Legacy | Logger start commands → `0x01` ACK |
+| `x`,`o`,`j`,`h` | Legacy | Logger stop commands → silent |
+
+### Output Channels (130-byte struct)
+
+The `EngineStatus` struct is packed to **exactly 130 bytes** with field order matching Speeduino 202501 `getTSLogEntry()` byte-for-byte. Key fields:
+
+| Bytes | Field | Notes |
+|-------|-------|-------|
+| 0 | `secl` | Seconds counter (wraps at 256) |
+| 4–5 | `mapLo/Hi` | MAP kPa (little-endian) |
+| 6 | `iat` | Intake temp (°C + 40) |
+| 7 | `clt` | Coolant temp (°C + 40) |
+| 9 | `battery10` | Battery voltage × 10 |
+| 14–15 | `rpmLo/Hi` | RPM (little-endian) |
+| 19–20 | `ve1`, `ve2` | VE table outputs (%) |
+| 21 | `afrTarget` | Target AFR × 10 |
+| 24 | `advance` | Ignition advance (°BTDC) |
+| 25 | `tps` | Throttle position (%) |
+| 76–77 | `pw1Lo/Hi` | Injector PW1 (µs/100) |
+| 90–91 | `dwellLo/Hi` | Dwell time |
+| 102 | `ve` | Current VE (%) |
+
+### TunerStudio Behaviour
+
+When connecting TunerStudio with a Speeduino 202501 INI file:
+
+- ✅ **Connection succeeds** — handshake completes, signature matches, live data streams
+- ✅ **Gauges display realistic values** — RPM, MAP, CLT, IAT, TPS, AFR, advance, VE, battery, pulse width, dwell all update in real time
+- ✅ **Data is correlated** — values change together logically (e.g. MAP rises with RPM, corrections respond to temperature)
+- ⚠️ **Tune pages return zeros** — this is not a real ECU; VE tables, ignition maps, and all configuration pages are empty
+- ⚠️ **EEPROM burn/restore errors** — TunerStudio may report CRC mismatches or warn that the tune looks unconfigured; this is expected
+- ⚠️ **Some dashboard items may show fault states** — features that depend on valid tune data (fuel trim targets, sensor calibrations) will appear as zero or out-of-range
+
+Despite the above warnings, all realtime gauge data is readable and realistic, making the simulator useful for:
+- Testing dashboard and logging software without a running engine
+- Validating Speeduino-compatible serial parsers
+- Demonstrating ECU data streams in educational settings
+
+### Compatibility with Other Software
+
+Any software that speaks the Speeduino serial protocol should work:
+
+| Tool | Notes |
+|------|-------|
+| **TunerStudio** | Connects via TCP (WiFi serial) or UART; gauges work, tune editing shows empty pages |
+| **SpeedyLoader** | Legacy `A` command; 130-byte raw struct |
+| **speeduino-to-mqtt** | Reads output channels over TCP/serial |
+| **Custom tools / `nc`** | Legacy single-byte commands work directly |
+| **Any Speeduino logger** | Framed `r` sub-command `0x30` at any offset/length |
+
+---
+
+## �📡 Usage
 
 ### Serial Communication
 
@@ -103,13 +197,19 @@ screen /dev/ttyUSB0 115200
 
 #### Supported Commands
 
-| Command | Description | Response Size |
-|---------|-------------|---------------|
-| `A` | Get real-time engine data | 79 bytes |
-| `Q` | ECU status | 4 bytes |
-| `V` | Firmware version | Variable |
-| `S` | ECU signature | 20 bytes |
-| `n` | Configuration page sizes | 7 bytes |
+See the **Protocol Implementation** section above for the full command reference. Quick summary:
+
+| Command | Description |
+|---------|-------------|
+| `A` | Realtime data (130-byte struct) |
+| `r` | Optimised output-channel read (offset + length) |
+| `Q` | Firmware version string |
+| `S` | Product identity string |
+| `F` | Protocol version (`002`) |
+| `C` | Comms test |
+| `n` | Page count and sizes |
+| `p` | Read tune page (zeros) |
+| `b`/`B` | Burn to EEPROM (ACK only) |
 
 ### Web Interface (ESP32/ESP8266 Only)
 
@@ -278,7 +378,8 @@ MIT License - See [LICENSE](LICENSE)
 
 ---
 
-**Version**: 2.1.0
+**Version**: 2.2.0
 **Major Changes**:
+- **v2.2.0**: Full Speeduino framed protocol v2 (CRC32) implemented; `EngineStatus` rewritten to 130-byte layout matching Speeduino 202501 `getTSLogEntry()` exactly; TunerStudio connects and reads realistic gauge data; WebInterface field names updated
 - **v2.1.0**: WiFi serial socket support (TCP/IP alternative to hardware UART), WiFi station mode added
 - **v2.0.0**: Complete rewrite with realistic physics, multi-platform support, web interface, comprehensive tests

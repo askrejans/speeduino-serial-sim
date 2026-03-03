@@ -132,8 +132,10 @@ void test_simulator_initialization() {
     
     const EngineStatus& status = simulator->getStatus();
     
-    TEST_ASSERT_EQUAL_INT('A', status.response);
+    // response field removed – struct now starts with secl at byte 0
     TEST_ASSERT_EQUAL_UINT16(0, status.getRPM());
+    TEST_ASSERT_EQUAL_UINT8(0, status.rpmLo);
+    TEST_ASSERT_EQUAL_UINT8(0, status.rpmHi);
     TEST_ASSERT_EQUAL(EngineMode::STARTUP, simulator->getMode());
 }
 
@@ -207,7 +209,8 @@ void test_volumetric_efficiency() {
 }
 
 void test_engine_status_size() {
-    TEST_ASSERT_EQUAL(79, sizeof(EngineStatus));
+    // EngineStatus matches Speeduino 202501 getTSLogEntry() exactly
+    TEST_ASSERT_EQUAL(130, sizeof(EngineStatus));
 }
 
 void test_runtime_tracking() {
@@ -235,10 +238,8 @@ void test_command_A_realtime_data() {
     bool processed = protocol->processCommands();
     
     TEST_ASSERT_TRUE(processed);
+    // Legacy 'A' sends raw 130-byte EngineStatus (no framing, no RC_OK prefix)
     TEST_ASSERT_EQUAL(sizeof(EngineStatus), mockSerial->getOutputSize());
-    
-    const uint8_t* output = mockSerial->getOutput();
-    TEST_ASSERT_EQUAL_INT('A', output[0]);  // Response echo
 }
 
 void test_command_V_version() {
@@ -273,7 +274,8 @@ void test_command_Q_status() {
     bool processed = protocol->processCommands();
     
     TEST_ASSERT_TRUE(processed);
-    TEST_ASSERT_EQUAL(4, mockSerial->getOutputSize());
+    // Legacy 'Q' returns raw version string "speeduino 202501" (16 bytes)
+    TEST_ASSERT_EQUAL(16, mockSerial->getOutputSize());
 }
 
 void test_command_S_signature() {
@@ -285,7 +287,8 @@ void test_command_S_signature() {
     bool processed = protocol->processCommands();
     
     TEST_ASSERT_TRUE(processed);
-    TEST_ASSERT_EQUAL(20, mockSerial->getOutputSize());
+    // Legacy 'S' returns raw product string "Speeduino 202501" (16 bytes)
+    TEST_ASSERT_EQUAL(16, mockSerial->getOutputSize());
 }
 
 void test_command_n_page_sizes() {
@@ -303,14 +306,16 @@ void test_command_n_page_sizes() {
 void test_unknown_command() {
     protocol->begin();
     
-    mockSerial->addInput('Z');  // Invalid command
+    mockSerial->addInput('Z');  // Unknown legacy command
     mockSerial->clearOutput();
     
     uint32_t initialErrors = protocol->getErrorCount();
     bool processed = protocol->processCommands();
     
+    // Unknown legacy commands are silently ignored (matches real Speeduino behaviour)
     TEST_ASSERT_TRUE(processed);
-    TEST_ASSERT_EQUAL(initialErrors + 1, protocol->getErrorCount());
+    TEST_ASSERT_EQUAL(0, mockSerial->getOutputSize());
+    TEST_ASSERT_EQUAL(initialErrors, protocol->getErrorCount());
 }
 
 void test_command_counter() {
@@ -393,33 +398,34 @@ void test_battery_voltage_stable() {
         delay(UPDATE_INTERVAL_MS);
     }
     
-    uint8_t voltage = simulator->getStatus().batteryv;
+    // battery10 stores voltage × 10 (e.g. 140 = 14.0 V)
+    uint8_t voltage = simulator->getStatus().battery10;
     
-    // Battery should be reasonable (8-15V)
-    TEST_ASSERT_GREATER_OR_EQUAL(8, voltage);
-    TEST_ASSERT_LESS_OR_EQUAL(15, voltage);
+    // Battery should be reasonable: 80 (8.0 V) – 160 (16.0 V)
+    TEST_ASSERT_GREATER_OR_EQUAL(80, voltage);
+    TEST_ASSERT_LESS_OR_EQUAL(160, voltage);
 }
 
 void test_afr_target_changes_with_load() {
     simulator->initialize();
     
-    // Idle AFR (should be stoich ~14.7)
+    // Idle AFR (should be stoich, AFR_STOICH=147 → afrTarget=147)
     simulator->setMode(EngineMode::IDLE);
     for (int i = 0; i < 20; i++) {
         simulator->update();
         delay(UPDATE_INTERVAL_MS);
     }
-    uint8_t idleAFR = simulator->getStatus().afrtarget;
+    uint8_t idleAFR = simulator->getStatus().afrTarget;
     
-    // WOT AFR (should be rich ~12.5)
+    // WOT AFR (should be rich, AFR_WOT=125 → afrTarget=125)
     simulator->setMode(EngineMode::WOT);
     for (int i = 0; i < 20; i++) {
         simulator->update();
         delay(UPDATE_INTERVAL_MS);
     }
-    uint8_t wotAFR = simulator->getStatus().afrtarget;
+    uint8_t wotAFR = simulator->getStatus().afrTarget;
     
-    // WOT should have lower (richer) AFR
+    // WOT (125) should be lower (richer) than idle (147)
     TEST_ASSERT_LESS_THAN(idleAFR, wotAFR);
 }
 
@@ -518,13 +524,13 @@ void test_command_A_response_format() {
     
     protocol->processCommands();
     
+    // Legacy 'A' sends raw 130-byte EngineStatus struct (no prefix)
+    // Byte 0 = secl, byte 1 = status1, byte 2 = engine
+    TEST_ASSERT_EQUAL(sizeof(EngineStatus), mockSerial->getOutputSize());
     const uint8_t* output = mockSerial->getOutput();
-    
-    // Verify response structure
-    TEST_ASSERT_EQUAL('A', output[0]);  // Response type
-    // Bytes should have reasonable values
-    TEST_ASSERT_NOT_EQUAL(0xFF, output[1]);  // secl
-    TEST_ASSERT_NOT_EQUAL(0xFF, output[2]);  // squirt
+    // Bytes should have reasonable values (not 0xFF)
+    TEST_ASSERT_NOT_EQUAL(0xFF, output[1]);  // status1
+    TEST_ASSERT_NOT_EQUAL(0xFF, output[2]);  // engine
 }
 
 // ============================================
@@ -660,7 +666,7 @@ void test_full_simulation_cycle() {
             mockSerial->addInput('A');
             bool processed = protocol->processCommands();
             TEST_ASSERT_TRUE(processed);
-            TEST_ASSERT_EQUAL(79, mockSerial->getOutputSize());
+            TEST_ASSERT_EQUAL(130, mockSerial->getOutputSize());
         }
         
         delay(UPDATE_INTERVAL_MS);
@@ -710,9 +716,8 @@ void test_all_modes_stability() {
             mockSerial->addInput('A');
             bool processed = protocol->processCommands();
             TEST_ASSERT_TRUE(processed);
-            
-            const uint8_t* output = mockSerial->getOutput();
-            TEST_ASSERT_EQUAL('A', output[0]);
+            // Legacy 'A': raw 130-byte struct, no 'A' prefix at byte 0
+            TEST_ASSERT_EQUAL(sizeof(EngineStatus), mockSerial->getOutputSize());
             
             delay(UPDATE_INTERVAL_MS);
         }

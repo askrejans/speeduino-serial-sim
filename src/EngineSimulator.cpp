@@ -34,9 +34,6 @@ void EngineSimulator::initialize() {
     // Zero out entire structure
     memset(&status, 0, sizeof(EngineStatus));
     
-    // Set command response
-    status.response = 'A';
-    
     // Initialize to cold engine state
     currentMode = EngineMode::STARTUP;
     engineStartTime = timeProvider->millis();
@@ -57,7 +54,7 @@ void EngineSimulator::initialize() {
     status.setCoolantTemp(coolantTemp / 10);
     status.setIntakeTemp(intakeTemp / 10);
     status.setMAP(MAP_ATMOSPHERIC);
-    status.batteryv = VOLTAGE_NORMAL / 10;
+    status.battery10 = VOLTAGE_NORMAL;
     status.baro = BARO_SEALEVEL;
     status.tps = currentThrottle;
     
@@ -101,16 +98,16 @@ bool EngineSimulator::update() {
     
     // Update counters and status
     uint16_t loops = loopCounter & 0xFFFF;
-    status.loopslo = loops & 0xFF;
-    status.loopshi = (loops >> 8) & 0xFF;
+    status.loopsLo = loops & 0xFF;
+    status.loopsHi = (loops >> 8) & 0xFF;
     
     // Simulate free RAM (more on ESP32, less on AVR)
     #ifdef ARDUINO_AVR
-        status.freeramlo = 512 & 0xFF;
-        status.freeramhi = (512 >> 8) & 0xFF;
+        status.freeRamLo = 512 & 0xFF;
+        status.freeRamHi = (512 >> 8) & 0xFF;
     #else
-        status.freeramlo = 8192 & 0xFF;
-        status.freeramhi = (8192 >> 8) & 0xFF;
+        status.freeRamLo = 8192 & 0xFF;
+        status.freeRamHi = (8192 >> 8) & 0xFF;
     #endif
     
     // Random error code (mostly no errors)
@@ -306,12 +303,12 @@ void EngineSimulator::simulateThrottle() {
     if (noisyThrottle > 100) noisyThrottle = 100;
     
     status.tps = noisyThrottle;
-    status.tpsadc = (noisyThrottle * 255) / 100;  // Scale to ADC range
+    status.tpsADC = (noisyThrottle * 255) / 100;  // Scale to ADC range
     
     // TPS rate of change
     static uint8_t lastTPS = 0;
     int16_t tpsDelta = status.tps - lastTPS;
-    status.tpsdot = tpsDelta * (1000 / UPDATE_INTERVAL_MS);  // Convert to %/s
+    status.setTpsDot(tpsDelta * (1000 / UPDATE_INTERVAL_MS));  // Convert to %/s
     lastTPS = status.tps;
 }
 
@@ -348,36 +345,42 @@ void EngineSimulator::simulateMAP() {
 
 void EngineSimulator::simulateFuel() {
     // Calculate volumetric efficiency
-    status.ve = calculateVE(currentRPM, currentThrottle);
+    uint8_t veVal = calculateVE(currentRPM, currentThrottle);
+    status.ve1 = veVal;
+    status.ve2 = veVal;
+    status.ve  = veVal;
     
     // Calculate required pulse width based on MAP, RPM, and VE
     uint16_t map = status.getMAP();
-    pulseWidth = calculateRequiredPulseWidth(currentRPM, map, status.ve);
+    pulseWidth = calculateRequiredPulseWidth(currentRPM, map, veVal);
     
     // Apply warm-up enrichment
     uint8_t wue = getWarmupEnrichment(coolantTemp);
     pulseWidth = (pulseWidth * wue) / 100;
-    status.wue = wue;
+    status.wueCorrection = wue;
     
     // Apply corrections
-    uint16_t correctedPW = (pulseWidth * status.egocorrection) / 100;
-    correctedPW = (correctedPW * status.iatcorrection) / 100;
+    uint16_t correctedPW = (pulseWidth * status.egoCorrection) / 100;
+    correctedPW = (correctedPW * status.iatCorrection) / 100;
     
     // Clamp to valid range
     if (correctedPW < PW_MIN) correctedPW = PW_MIN;
     if (correctedPW > PW_MAX) correctedPW = PW_MAX;
     
     status.setPulseWidth(correctedPW);
+    // Mirror PW to secondary injectors
+    status.pw2Lo = status.pw1Lo; status.pw2Hi = status.pw1Hi;
+    status.pw3Lo = status.pw1Lo; status.pw3Hi = status.pw1Hi;
+    status.pw4Lo = status.pw1Lo; status.pw4Hi = status.pw1Hi;
     
-    // Acceleration enrichment
-    if (status.tpsdot > 10) {
-        status.taeamount = 100 + status.tpsdot / 2;
-    } else {
-        status.taeamount = 100;
-    }
+    // Acceleration enrichment: TS expects AEamount >> 1
+    int16_t tpsDot = (int16_t)((uint16_t)status.tpsDotHi << 8 | status.tpsDotLo);
+    uint8_t taeAmount = (tpsDot > 10) ? (uint8_t)(100 + tpsDot / 2) : 100;
+    status.aeAmount = taeAmount >> 1;
     
-    // Total fuel correction
-    status.gammae = (status.egocorrection * status.iatcorrection * status.wue) / 10000;
+    // Total fuel correction (16-bit gammaE)
+    uint16_t gammaE = (uint16_t)status.egoCorrection * status.iatCorrection / 100;
+    status.setCorrections(gammaE);
 }
 
 void EngineSimulator::simulateIgnition() {
@@ -388,13 +391,13 @@ void EngineSimulator::simulateIgnition() {
     // Dwell time (coil charge time) based on voltage and RPM
     // Typical: 3-4ms at 14V, increases at low voltage
     uint16_t baseDwell = 35;  // 3.5ms in 0.1ms units
-    if (status.batteryv < 12) {
+    if (status.battery10 < 120) {
         baseDwell = 45;  // 4.5ms at low voltage
     }
-    status.dwell = baseDwell;
+    status.setDwell(baseDwell);
     
     // Spark flags (example: bit 0 = spark enabled)
-    status.spark = 0x01;
+    status.status2 = 0x01;
 }
 
 void EngineSimulator::simulateAFR() {
@@ -418,7 +421,7 @@ void EngineSimulator::simulateAFR() {
             break;
     }
     
-    status.afrtarget = targetAFR;
+    status.afrTarget = targetAFR;
     
     // Simulate O2 sensor reading
     // O2 value: 0-255 maps to lambda 0.5-1.5
@@ -437,43 +440,43 @@ void EngineSimulator::simulateCorrections() {
     if (coolantTemp > 500 && currentMode != EngineMode::WOT) {
         // Closed loop active
         static int8_t egoTrend = 1;
-        status.egocorrection += egoTrend;
-        if (status.egocorrection > 110) egoTrend = -1;
-        if (status.egocorrection < 90) egoTrend = 1;
+        status.egoCorrection += egoTrend;
+        if (status.egoCorrection > 110) egoTrend = -1;
+        if (status.egoCorrection < 90) egoTrend = 1;
     } else {
         // Open loop
-        status.egocorrection = 100;
+        status.egoCorrection = 100;
     }
     
     // IAT correction: richer when intake air is cold
     int16_t iatCelsius = intakeTemp / 10;
     if (iatCelsius < 0) {
-        status.iatcorrection = 110;  // 10% enrichment
+        status.iatCorrection = 110;  // 10% enrichment
     } else if (iatCelsius < 10) {
-        status.iatcorrection = 105;  // 5% enrichment
+        status.iatCorrection = 105;  // 5% enrichment
     } else {
-        status.iatcorrection = 100;  // No correction
+        status.iatCorrection = 100;  // No correction
     }
     
     // Battery voltage correction
-    if (status.batteryv < 12) {
-        status.batcorrection = 105;  // Increase pulse width at low voltage
+    if (status.battery10 < 120) {
+        status.batCorrection = 105;  // Increase pulse width at low voltage
     } else {
-        status.batcorrection = 100;
+        status.batCorrection = 100;
     }
     
     // Flex fuel (not used in this simulation, set to gasoline)
-    status.ethanolpct = 0;
-    status.flexcorrection = 100;
-    status.flexigncorrection = 0;
+    status.ethanolPct = 0;
+    status.flexCorrection = 100;
+    status.flexIgnCorrection = 0;
     
     // Idle load
-    status.idleload = (currentMode == EngineMode::IDLE) ? 
+    status.idleLoad = (currentMode == EngineMode::IDLE) ?
                       (30 + randomProvider->random(-5, 5)) : 0;
     
-    // Boost (N/A engine, no boost)
-    status.boosttarget = 0;
-    status.boostduty = 0;
+    // Boost (N/A engine, no boost); TS expects kPa>>1 and duty/100
+    status.boostTarget = 0;
+    status.boostDuty = 0;
 }
 
 void EngineSimulator::simulateSensors() {
@@ -487,20 +490,21 @@ void EngineSimulator::simulateSensors() {
     if (currentRPM > 0) status.engine |= 0x02;  // Running
     
     // Test outputs
-    status.testoutputs = 0x00;
+    status.testOutputs = 0x00;
 }
 
 void EngineSimulator::simulateVoltage() {
-    // Battery voltage fluctuates based on load
-    uint8_t baseVoltage = VOLTAGE_NORMAL / 10;
+    // Battery voltage fluctuates based on load (stored as V × 10)
+    uint8_t baseVoltage = VOLTAGE_NORMAL;  // 140 = 14.0 V
     
     if (currentMode == EngineMode::STARTUP) {
-        baseVoltage = 10;  // Voltage drops during cranking
+        baseVoltage = 100;  // 10.0 V during cranking
     } else if (currentRPM > RPM_CRUISE) {
-        baseVoltage = 14;  // Alternator charging
+        baseVoltage = 140;  // 14.0 V when alternator charges
     }
     
-    status.batteryv = baseVoltage + addNoise(0, 1);
+    int8_t noise = addNoise(0, 3);  // ±0.3 V noise
+    status.battery10 = (uint8_t)(baseVoltage + noise);
 }
 
 void EngineSimulator::simulateCANData() {

@@ -1,16 +1,19 @@
 /**
  * @file SpeeduinoProtocol.h
  * @brief Speeduino serial protocol handler
- * 
- * Implements the Speeduino ECU serial protocol for communication with
- * TunerStudio, SpeedyLoader, and other compatible software.
- * 
- * Supported commands:
- * - 'A': Get real-time data (75 bytes + 4 CAN)
- * - 'Q': ECU status and capabilities
- * - 'V': Firmware version string
- * - 'S': ECU signature (identification)
- * - 'n': Get page sizes
+ *
+ * Implements both legacy (single-byte) and framed (v2) Speeduino protocol.
+ *
+ * Framed protocol format:
+ *   Request:  [2-byte BE length] [payload bytes] [4-byte BE CRC32]
+ *   Response: [2-byte BE length] [payload bytes] [4-byte BE CRC32]
+ *
+ * TunerStudio connection sequence:
+ *   1. Legacy 'F' → raw response {0x00,'0','0','2'} (protocol version 2)
+ *   2. Framed 'C' → {SERIAL_RC_OK, 0xFF}   (comms test)
+ *   3. Framed 'Q' → {SERIAL_RC_OK, version string}
+ *   4. Framed 'S' → {SERIAL_RC_OK, product string}
+ *   5. Framed 'r' → {SERIAL_RC_OK, output channel bytes}
  */
 
 #ifndef SPEEDUINO_PROTOCOL_H
@@ -21,6 +24,9 @@
 #include "ISerialInterface.h"
 #include "Config.h"
 
+// Maximum framed payload we'll accept from TunerStudio
+#define MAX_PAYLOAD_SIZE 512
+
 /**
  * @class SpeeduinoProtocol
  * @brief Serial protocol handler for Speeduino commands
@@ -29,55 +35,48 @@ class SpeeduinoProtocol {
 private:
     ISerialInterface* serial;
     EngineSimulator* simulator;
-    
+
     // Statistics
     uint32_t commandCount;
     uint32_t errorCount;
     uint32_t lastCommandTime;
-    
+
 public:
-    /**
-     * @brief Constructor
-     * @param serial Serial interface for communication
-     * @param simulator Engine simulator providing data
-     */
     SpeeduinoProtocol(ISerialInterface* serial, EngineSimulator* simulator);
-    
-    /**
-     * @brief Initialize protocol handler
-     */
     void begin();
-    
+
     /**
-     * @brief Process incoming serial commands (call in loop)
-     * @return true if command was processed, false if none available
+     * @brief Process one incoming command (call repeatedly in loop)
+     * @return true if a command was processed
      */
     bool processCommands();
-    
-    /**
-     * @brief Get total commands processed
-     * @return Command count
-     */
+
     uint32_t getCommandCount() const { return commandCount; }
-    
-    /**
-     * @brief Get error count
-     * @return Number of invalid commands
-     */
-    uint32_t getErrorCount() const { return errorCount; }
-    
+    uint32_t getErrorCount()   const { return errorCount; }
+
 private:
-    // Command handlers
-    void handleRealtimeData();      // 'A' command
-    void handleStatusRequest();     // 'Q' command
-    void handleVersionRequest();    // 'V' command (alias 'v')
-    void handleSignatureRequest();  // 'S' command
-    void handlePageSizesRequest();  // 'n' command
-    void handleUnknownCommand(char cmd);
-    
-    // Utility functions
-    void sendResponse(const uint8_t* data, size_t length);
-    void sendString(const char* str);
+    // ---- Framed protocol (v2) ----
+    void processFramedCommand(const uint8_t* payload, uint16_t length);
+    void sendFramedResponse(const uint8_t* data, uint16_t length);
+    void sendFramedError(uint8_t errorCode);
+
+    // ---- Legacy single-byte protocol ----
+    void processLegacyCommand(char cmd);
+    void sendLegacyResponse(const uint8_t* data, size_t length);
+    void sendLegacyString(const char* str);
+
+    // ---- Shared helpers ----
+    void sendResponse(const uint8_t* data, size_t length);  // kept for compat
+    void sendString(const char* str);                        // kept for compat
+
+    /**
+     * @brief Read exactly `count` bytes with a timeout
+     * @return true if all bytes were read before timeout
+     */
+    bool readBytes(uint8_t* buf, uint16_t count, uint32_t timeoutMs = 200);
+
+    /** @brief Standard CRC32 (Ethernet/ZIP polynomial) */
+    static uint32_t crc32(const uint8_t* data, size_t length);
 };
 
 #endif // SPEEDUINO_PROTOCOL_H

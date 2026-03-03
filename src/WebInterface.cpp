@@ -623,10 +623,10 @@ String WebInterface::getRealtimeJSON() {
     doc["iat"] = status.getIntakeTemp();
     doc["map"] = status.getMAP();
     doc["tps"] = status.tps;
-    doc["afr"] = status.afrtarget / 10.0;
+    doc["afr"] = status.afrTarget / 10.0;
     doc["advance"] = status.advance;
     doc["pw"] = status.getPulseWidth() / 10.0;
-    doc["battery"] = status.batteryv / 10.0;
+    doc["battery"] = status.battery10 / 10.0;
     doc["ve"] = status.ve;
     
     String output;
