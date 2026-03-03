@@ -12,6 +12,10 @@
 #include "ITimeProvider.h"
 #include "IRandomProvider.h"
 
+#if defined(ENABLE_WIFI) && defined(ENABLE_WIFI_SERIAL)
+  #include "WiFiSerialAdapter.h"
+#endif
+
 #if defined(ARDUINO)
   #include <Arduino.h>
 #endif
@@ -120,9 +124,17 @@ public:
 /**
  * @brief Create platform-appropriate serial interface
  * @return Pointer to serial interface (caller owns memory)
+ * 
+ * When ENABLE_WIFI_SERIAL is defined, returns a WiFiSerialAdapter
+ * that listens on WIFI_SERIAL_PORT for TCP connections.
+ * Otherwise returns the default hardware serial adapter.
  */
 inline ISerialInterface* createSerialInterface() {
+#if defined(ENABLE_WIFI) && defined(ENABLE_WIFI_SERIAL)
+    return new WiFiSerialAdapter(WIFI_SERIAL_PORT);
+#else
     return new ArduinoSerialAdapter();
+#endif
 }
 
 /**

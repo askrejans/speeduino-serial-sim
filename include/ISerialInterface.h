@@ -18,9 +18,10 @@
  * 
  * Implementations:
  * - ArduinoSerialAdapter: Uses Arduino HardwareSerial
- * - ESP32SerialAdapter: Uses ESP32 UART
+ * - WiFiSerialAdapter:    Uses WiFi TCP/IP socket (ESP32/ESP8266)
+ * - ESP32SerialAdapter:   Uses ESP32 UART
  * - ESP8266SerialAdapter: Uses ESP8266 UART
- * - MockSerialAdapter: For unit testing
+ * - MockSerialAdapter:    For unit testing
  */
 class ISerialInterface {
 public:

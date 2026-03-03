@@ -59,10 +59,18 @@ bool WebInterface::begin(bool apMode) {
 void WebInterface::setupWiFiAP() {
     Serial.println("Starting WiFi Access Point...");
     
+    // Cleanly tear down any prior WiFi state to avoid
+    // "addba response cb: ap bss deleted" errors from ESP-IDF
+    WiFi.disconnect(true);
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_OFF);
+    delay(100);
+    
     WiFi.mode(WIFI_AP);
     bool success = WiFi.softAP(WIFI_SSID, WIFI_PASSWORD);
     
     if (success) {
+        delay(100);  // Allow AP to stabilize
         ipAddress = WiFi.softAPIP();
         wifiConnected = true;
         Serial.print("AP started. IP: ");
@@ -75,6 +83,12 @@ void WebInterface::setupWiFiAP() {
 
 void WebInterface::setupWiFiStation() {
     Serial.println("Connecting to WiFi...");
+    
+    // Cleanly tear down any prior WiFi state
+    WiFi.disconnect(true);
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_OFF);
+    delay(100);
     
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);

@@ -6,6 +6,18 @@
 #include "SpeeduinoProtocol.h"
 #include <string.h>
 
+// When WiFi serial is active, the hardware Serial port is free for monitoring
+#if defined(ENABLE_WIFI) && defined(ENABLE_WIFI_SERIAL)
+  #include <Arduino.h>
+  #define MONITOR_LOG(msg)          Serial.print(msg)
+  #define MONITOR_LOGLN(msg)        Serial.println(msg)
+  #define MONITOR_LOGF(fmt, ...)    Serial.printf(fmt, ##__VA_ARGS__)
+#else
+  #define MONITOR_LOG(msg)
+  #define MONITOR_LOGLN(msg)
+  #define MONITOR_LOGF(fmt, ...)
+#endif
+
 SpeeduinoProtocol::SpeeduinoProtocol(ISerialInterface* serial, EngineSimulator* simulator)
     : serial(serial)
     , simulator(simulator)
@@ -34,6 +46,10 @@ bool SpeeduinoProtocol::processCommands() {
     
     char command = (char)cmdByte;
     commandCount++;
+    
+    MONITOR_LOGF("[CMD] '%c' (0x%02X) #%lu\n", 
+                 (command >= 0x20 && command < 0x7F) ? command : '.', 
+                 (uint8_t)command, commandCount);
     
     // Dispatch to appropriate handler
     switch (command) {
@@ -187,10 +203,12 @@ void SpeeduinoProtocol::handleUnknownCommand(char cmd) {
 void SpeeduinoProtocol::sendResponse(const uint8_t* data, size_t length) {
     serial->write(data, length);
     serial->flush();
+    MONITOR_LOGF("[RSP] %u bytes\n", (unsigned)length);
 }
 
 void SpeeduinoProtocol::sendString(const char* str) {
     size_t len = strlen(str);
     serial->write((const uint8_t*)str, len);
     serial->flush();
+    MONITOR_LOGF("[RSP] \"%s\" (%u bytes)\n", str, (unsigned)len);
 }
