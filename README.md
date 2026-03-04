@@ -158,12 +158,12 @@ The `EngineStatus` struct is packed to **exactly 130 bytes** with field order ma
 
 When connecting TunerStudio with a Speeduino 202501 INI file:
 
-- ✅ **Connection succeeds** — handshake completes, signature matches, live data streams
-- ✅ **Gauges display realistic values** — RPM, MAP, CLT, IAT, TPS, AFR, advance, VE, battery, pulse width, dwell all update in real time
-- ✅ **Data is correlated** — values change together logically (e.g. MAP rises with RPM, corrections respond to temperature)
-- ⚠️ **Tune pages return zeros** — this is not a real ECU; VE tables, ignition maps, and all configuration pages are empty
-- ⚠️ **EEPROM burn/restore errors** — TunerStudio may report CRC mismatches or warn that the tune looks unconfigured; this is expected
-- ⚠️ **Some dashboard items may show fault states** — features that depend on valid tune data (fuel trim targets, sensor calibrations) will appear as zero or out-of-range
+- **Connection succeeds** — handshake completes, signature matches, live data streams
+- **Gauges display realistic values** — RPM, MAP, CLT, IAT, TPS, AFR, advance, VE, battery, pulse width, dwell all update in real time
+- **Data is correlated** — values change together logically (e.g. MAP rises with RPM, corrections respond to temperature)
+- **Tune pages return zeros** — this is not a real ECU; VE tables, ignition maps, and all configuration pages are empty
+- **EEPROM burn/restore errors** — TunerStudio may report CRC mismatches or warn that the tune looks unconfigured; this is expected
+- **Some dashboard items may show fault states** — features that depend on valid tune data (fuel trim targets, sensor calibrations) will appear as zero or out-of-range
 
 Despite the above warnings, all realtime gauge data is readable and realistic, making the simulator useful for:
 - Testing dashboard and logging software without a running engine
@@ -322,7 +322,7 @@ Simulates a **2.0L Inline-4 engine** with:
 
 STARTUP → WARMUP → IDLE ⇄ LIGHT_LOAD ⇄ ACCELERATION → HIGH_RPM → DECELERATION → IDLE
 
-## 🔧 Configuration
+## Configuration
 
 Edit `include/Config.h`:
 
