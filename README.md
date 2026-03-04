@@ -2,7 +2,9 @@
 
 Speeduino ECU serial protocol simulator with a realistic engine model and full Speeduino protocol implementation. Streams live telemetry to tools like TunerStudio via UART or WiFi TCP serial. Runs on Arduino, ESP32, and ESP8266 for testing dashboards, loggers, and ECU integrations without real hardware.
 
-## 🚀 Features
+<img width="1536" height="1024" alt="ChatGPT Image Mar 4, 2026, 10_27_27 AM" src="https://github.com/user-attachments/assets/37d17935-6fb9-4c8f-ba68-a8355210c294" />
+
+## Features
 
 ### Core Features
 - **Realistic Engine Simulation**: Physics-based I4 2.0L engine model with correlated parameters
@@ -51,7 +53,7 @@ The feature enables serial communication over TCP/IP instead of hardware UART. T
 - Web interface remains on port 80 (HTTP)
 - Simultaneous web dashboard + remote serial access
 
-## 📋 Requirements
+## Requirements
 
 ### Hardware
 - **Arduino**: Uno, Mega, Nano (ATmega328P/2560)
@@ -61,7 +63,7 @@ The feature enables serial communication over TCP/IP instead of hardware UART. T
 ### Software
 - PlatformIO Core or PlatformIO IDE
 
-## 🔧 Installation
+## Installation
 
 ### Quick Start with PlatformIO
 
@@ -90,7 +92,7 @@ The project is now PlatformIO-based. For Arduino IDE users:
 2. Rename `main.cpp` to match your sketch name
 3. Note: Web interface and advanced features require PlatformIO
 
-## � Speeduino Protocol Implementation
+## Speeduino Protocol Implementation
 
 The simulator implements the full **Speeduino serial protocol v2** (framed CRC32) as used by TunerStudio and compatible tools, alongside the legacy single-byte protocol used for initial handshake and other utilities.
 
@@ -182,7 +184,7 @@ Any software that speaks the Speeduino serial protocol should work:
 
 ---
 
-## �📡 Usage
+## Usage
 
 ### Serial Communication
 
@@ -282,7 +284,7 @@ echo -n "V" | nc 192.168.4.1 5000
 while true; do   ts=$(date '+%Y-%m-%d %H:%M:%S.%3N');    exec 3<>/dev/tcp/192.168.4.1/5000;   printf "A" >&3;    frame=$(dd bs=79 count=1 <&3 2>/dev/null | xxd -p -c 79);   exec 3>&-;    if [ ${#frame} -eq 158 ]; then     rpm=$(( 0x${frame:32:2}${frame:30:2} ));     echo "$ts RPM=$rpm";   else     echo "$ts BAD_FRAME";   fi;    sleep 0.1; done
 ```
 
-## 🧪 Testing
+## Testing
 
 ### Unit Tests
 
@@ -304,7 +306,7 @@ platformio test -e esp32s3 -vvv
 
 See [test/README.md](test/README.md) for detailed test documentation.
 
-## 📊 Engine Simulation
+## Engine Simulation
 
 ### Physical Model
 
@@ -332,7 +334,7 @@ Edit `include/Config.h`:
 #define WIFI_PASSWORD "speeduino123"
 ```
 
-## 📈 Performance
+## Performance
 
 | Platform | Flash | RAM | Update Rate | Response Time |
 |----------|-------|-----|-------------|---------------|
@@ -340,13 +342,13 @@ Edit `include/Config.h`:
 | ESP32 | ~45 KB | ~15 KB | 20 Hz | <2 ms |
 | ESP8266 | ~40 KB | ~12 KB | 20 Hz | <3 ms |
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 **Serial Issues**: Check baud rate (115200), verify port  
 **WiFi Issues**: Connect to AP "SpeeduinoSim", use 192.168.4.1  
 **Compilation**: Use PlatformIO for best results
 
-## 📝 Architecture
+## Architecture
 
 ```
 main.cpp → EngineSimulator (Physics) → SpeeduinoProtocol (Serial)
@@ -368,11 +370,11 @@ Key components:
 - ECU logging software development
 - Educational demonstrations
 
-## 📜 License
+## License
 
 MIT License - See [LICENSE](LICENSE)
 
-## 📧 Contact
+## Contact
 
 - **GitHub**: [@askrejans](https://github.com/askrejans)
 
