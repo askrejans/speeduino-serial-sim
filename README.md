@@ -1,6 +1,6 @@
 # Speeduino Serial Simulator - v2.2.0
 
-A cross-platform Speeduino ECU serial interface simulator with realistic I4 engine simulation, supporting Arduino AVR, ESP32, and ESP8266. Tested more on ESP32 for now.
+Speeduino ECU serial protocol simulator with a realistic engine model and full Speeduino protocol implementation. Streams live telemetry to tools like TunerStudio via UART or WiFi TCP serial. Runs on Arduino, ESP32, and ESP8266 for testing dashboards, loggers, and ECU integrations without real hardware.
 
 ## 🚀 Features
 
