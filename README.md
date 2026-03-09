@@ -1,4 +1,4 @@
-# Speeduino Serial Simulator - v2.2.0
+# Speeduino Serial Simulator
 
 Speeduino ECU serial protocol simulator with a realistic engine model and full Speeduino protocol implementation. Streams live telemetry to tools like TunerStudio via UART or WiFi TCP serial. Runs on Arduino, ESP32, and ESP8266 for testing dashboards, loggers, and ECU integrations without real hardware.
 
@@ -12,6 +12,9 @@ Speeduino ECU serial protocol simulator with a realistic engine model and full S
 - **Accurate Output Channels**: 130-byte `EngineStatus` struct byte layout matches Speeduino 202501 `getTSLogEntry()` exactly
 - **TunerStudio Compatible**: Connects, streams live gauge data at ~20 Hz via TCP or UART
 - **Cross-Platform**: Arduino AVR, ESP32, ESP8266
+
+<img width="1233" height="790" alt="Screenshot 2026-03-10 at 00 22 27" src="https://github.com/user-attachments/assets/e28e141e-77c1-4093-82c8-48897f7d8c04" />
+
 
 ### Platform-Specific Features
 
