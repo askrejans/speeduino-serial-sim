@@ -22,6 +22,7 @@
 #ifdef ENABLE_WIFI
 
 #include "ISerialInterface.h"
+#include <Arduino.h>
 #include "Config.h"
 
 #ifdef ESP32
@@ -127,40 +128,26 @@ public:
         return 0;
     }
 
-    /**
-     * @brief Write a single byte to the TCP socket
-     * @param byte Byte to write
-     * @return 1 if written, 0 if no client connected
-     */
+    /// Bytes are collected and sent as one segment on flush() (the protocol
+    /// flushes after every reply); byte-by-byte writes would each become a
+    /// TCP segment over Wi-Fi.
     size_t write(uint8_t byte) override {
-        checkForClient();
-        if (clientConnected && client.connected()) {
-            return client.write(byte);
-        }
-        return 0;
+        if (txLen >= sizeof(tx)) flush();
+        tx[txLen++] = byte;
+        return 1;
     }
 
-    /**
-     * @brief Write multiple bytes to the TCP socket
-     * @param buffer Source buffer
-     * @param length Number of bytes to write
-     * @return Number of bytes actually written
-     */
     size_t write(const uint8_t* buffer, size_t length) override {
-        checkForClient();
-        if (clientConnected && client.connected()) {
-            return client.write(buffer, length);
-        }
-        return 0;
+        for (size_t i = 0; i < length; i++) write(buffer[i]);
+        return length;
     }
 
-    /**
-     * @brief Flush the TCP output buffer
-     */
+    /// Send what is buffered. Not WiFiClient::flush(): on ESP32 that has
+    /// discarded received data, i.e. the client's next request.
     void flush() override {
-        if (clientConnected && client.connected()) {
-            client.flush();
-        }
+        checkForClient();
+        if (txLen && clientConnected && client.connected()) client.write(tx, txLen);
+        txLen = 0;
     }
 
     /**
@@ -193,6 +180,8 @@ private:
     bool       clientConnected;
     bool       started;
     bool       beginRequested;
+    uint8_t    tx[512];
+    size_t     txLen = 0;
 
     /**
      * @brief Check if WiFi is connected (AP or STA mode)
@@ -251,7 +240,11 @@ private:
 
         // Accept a new client if none is connected
         if (!clientConnected) {
+#if defined(ESP32) && defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+            WiFiClient newClient = server.accept();
+#else
             WiFiClient newClient = server.available();
+#endif
             if (newClient) {
                 client = newClient;
                 client.setNoDelay(true);

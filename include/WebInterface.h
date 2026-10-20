@@ -1,143 +1,78 @@
 /**
  * @file WebInterface.h
- * @brief Web-based configuration and monitoring interface
- * 
- * ESP32/ESP8266 only feature providing:
- * - Real-time engine parameter display
- * - Simulation mode control
- * - Configuration via web UI
- * - REST API for external integration
+ * @brief Wi-Fi (station with access-point fallback), web dashboard and HTTP
+ *        API on ESP32 / ESP8266.
+ *
+ * Request handlers run on the network task (ESP32) and never touch the
+ * simulator: the main loop publishes JSON snapshots into locked buffers and
+ * applies queued commands.
  */
-
-#ifndef WEB_INTERFACE_H
-#define WEB_INTERFACE_H
+#pragma once
 
 #ifdef ENABLE_WEB_INTERFACE
 
+#include <Arduino.h>
 #include "EngineSimulator.h"
 #include "SpeeduinoProtocol.h"
-#include "Config.h"
 
 #ifdef ESP32
+  #include <AsyncTCP.h>
   #include <WiFi.h>
-  #include <ESPAsyncWebServer.h>
-  #include <ESPmDNS.h>
-  #include <Preferences.h>
 #elif defined(ESP8266)
   #include <ESP8266WiFi.h>
-  #include <ESPAsyncWebServer.h>
   #include <ESPAsyncTCP.h>
-  #include <ESP8266mDNS.h>
-  #include <EEPROM.h>
+#endif
+#include <ESPAsyncWebServer.h>
+
+class WebInterface {
+public:
+    WebInterface(EngineSimulator* sim, SpeeduinoProtocol* protocol, const char* serialTransport);
+    /// Start Wi-Fi and the server. Station mode with saved credentials, else
+    /// an access point (SpeeduinoSim / speeduino123 at 192.168.4.1).
+    void begin();
+    /// Call every loop(): publishes snapshots, streams, applies commands.
+    void loop(bool serialClient);
+    bool accessPoint() const { return apMode; }
+    IPAddress ip() const;
+
+private:
+    struct Pending {
+        uint8_t kind = 0;   // 0 none, 1 command, 2 settings
+        Command command = Command::StartEngine;
+        SimSettings settings;
+        bool restart = false;
+    };
+
+    EngineSimulator* sim;
+    SpeeduinoProtocol* protocol;
+    const char* serialTransport;
+    AsyncWebServer server;
+    AsyncEventSource events;
+    bool apMode = true;
+    bool restartPending = false;
+    uint32_t restartAt = 0;
+    uint32_t lastLive = 0, lastStatus = 0, lastPacket = 0;
+    char ssid[33] = {};
+    char password[65] = {};
+
+    char live[900];
+    char status[1536];
+    char packet[640];
+    char* track = nullptr;
+    Pending pending;
+#ifdef ESP32
+    portMUX_TYPE lock = portMUX_INITIALIZER_UNLOCKED;
 #endif
 
-#include <ArduinoJson.h>
-
-/**
- * @struct WiFiConfig
- * @brief WiFi configuration storage
- */
-struct WiFiConfig {
-    char staSSID[33];      // Station mode SSID
-    char staPassword[65];  // Station mode password
-    bool useStationMode;   // true = connect to WiFi, false = AP only
-    bool isConfigured;     // true if user has configured WiFi
+    void loadCredentials();
+    void saveCredentials(const char* ssid, const char* pass);
+    bool connectStation();
+    void startAccessPoint();
+    void routes();
+    void sendBuffer(AsyncWebServerRequest* r, const char* buf);
+    void queue(const Pending& p);
+    void enter();
+    void leave();
 };
 
-/**
- * @class WebInterface
- * @brief Web server for simulator configuration and monitoring
- */
-class WebInterface {
-private:
-    AsyncWebServer* server;
-    EngineSimulator* simulator;
-    SpeeduinoProtocol* protocol;
-    bool wifiConnected;
-    IPAddress ipAddress;
-    WiFiConfig config;
-    bool isAPMode;
-    #ifdef ESP32
-        Preferences preferences;
-    #endif
-    
-public:
-    /**
-     * @brief Constructor
-     * @param simulator Engine simulator reference
-     * @param protocol Protocol handler reference
-     */
-    WebInterface(EngineSimulator* simulator, SpeeduinoProtocol* protocol);
-    
-    /**
-     * @brief Destructor
-     */
-    ~WebInterface();
-    
-    /**
-     * @brief Initialize WiFi and web server
-     * Attempts station mode if configured, falls back to AP mode
-     * @return true if successful
-     */
-    bool begin();
-    
-    /**
-     * @brief Check WiFi connection status
-     * @return true if connected
-     */
-    bool isConnected() const { return wifiConnected; }
-    
-    /**
-     * @brief Get IP address
-     * @return Current IP address
-     */
-    IPAddress getIP() const { return ipAddress; }
-    
-    /**
-     * @brief Check if in AP mode
-     * @return true if AP mode, false if station mode
-     */
-    bool isAccessPointMode() const { return isAPMode; }
-    
-    /**
-     * @brief Update WiFi and handle reconnection
-     */
-    void update();
-    
-private:
-    // WiFi configuration
-    void loadConfig();
-    void saveConfig();
-    void resetConfig();
-    
-    // WiFi management
-    void setupWiFiAP();
-    bool setupWiFiStation();
-    bool attemptStationConnection();
-    
-    // Route handlers
-    void setupRoutes();
-    void handleRoot(AsyncWebServerRequest* request);
-    void handleStatus(AsyncWebServerRequest* request);
-    void handleSetMode(AsyncWebServerRequest* request);
-    void handleRealtimeData(AsyncWebServerRequest* request);
-    void handleStatistics(AsyncWebServerRequest* request);
-    void handleWiFiConfig(AsyncWebServerRequest* request);
-    void handleWiFiSave(AsyncWebServerRequest* request);
-    void handleWiFiScan(AsyncWebServerRequest* request);
-    void handleWiFiReset(AsyncWebServerRequest* request);
-    void handleNotFound(AsyncWebServerRequest* request);
-    
-    // HTML pages
-    String generateHomePage();
-    String generateWiFiConfigPage();
-    String generateDashboard();
-    
-    // JSON helpers
-    String getStatusJSON();
-    String getRealtimeJSON();
-    String getStatisticsJSON();
-};
-
-#endif // ENABLE_WEB_INTERFACE
-#endif // WEB_INTERFACE_H
+#endif

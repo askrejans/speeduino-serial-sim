@@ -1,82 +1,95 @@
 /**
  * @file SpeeduinoProtocol.h
- * @brief Speeduino serial protocol handler
+ * @brief Speeduino 202501 serial protocol: legacy single-byte commands and
+ *        the framed (msEnvelope) protocol TunerStudio uses.
  *
- * Implements both legacy (single-byte) and framed (v2) Speeduino protocol.
- *
- * Framed protocol format:
- *   Request:  [2-byte BE length] [payload bytes] [4-byte BE CRC32]
- *   Response: [2-byte BE length] [payload bytes] [4-byte BE CRC32]
- *
- * TunerStudio connection sequence:
- *   1. Legacy 'F' → raw response {0x00,'0','0','2'} (protocol version 2)
- *   2. Framed 'C' → {SERIAL_RC_OK, 0xFF}   (comms test)
- *   3. Framed 'Q' → {SERIAL_RC_OK, version string}
- *   4. Framed 'S' → {SERIAL_RC_OK, product string}
- *   5. Framed 'r' → {SERIAL_RC_OK, output channel bytes}
+ * Responses mirror speeduino/comms.cpp and comms_legacy.cpp of release
+ * 202501.6. Framed frames are [u16 BE length][payload][u32 BE CRC32];
+ * responses are streamed with a running CRC, so no response buffer is needed
+ * (an Uno has 2 KB of RAM).
  */
+#pragma once
 
-#ifndef SPEEDUINO_PROTOCOL_H
-#define SPEEDUINO_PROTOCOL_H
-
-#include "EngineStatus.h"
+#include <stdint.h>
+#include <stddef.h>
+#include "Config.h"
 #include "EngineSimulator.h"
 #include "ISerialInterface.h"
-#include "Config.h"
+#include "ITimeProvider.h"
 
-// Maximum framed payload we'll accept from TunerStudio
-#define MAX_PAYLOAD_SIZE 512
+namespace rc {
+constexpr uint8_t OK = 0x00, BURN_OK = 0x04, TIMEOUT = 0x80, CRC_ERR = 0x82, UNKNOWN = 0x83, RANGE_ERR = 0x84;
+}
 
-/**
- * @class SpeeduinoProtocol
- * @brief Serial protocol handler for Speeduino commands
- */
-class SpeeduinoProtocol {
-private:
-    ISerialInterface* serial;
-    EngineSimulator* simulator;
-
-    // Statistics
-    uint32_t commandCount;
-    uint32_t errorCount;
-    uint32_t lastCommandTime;
-
+/// Tune pages TunerStudio reads and writes (sizes from speeduino.ini).
+class TunePages {
 public:
-    SpeeduinoProtocol(ISerialInterface* serial, EngineSimulator* simulator);
-    void begin();
-
-    /**
-     * @brief Process one incoming command (call repeatedly in loop)
-     * @return true if a command was processed
-     */
-    bool processCommands();
-
-    uint32_t getCommandCount() const { return commandCount; }
-    uint32_t getErrorCount()   const { return errorCount; }
-
+    static constexpr uint8_t COUNT = 15;
+    static uint16_t size(uint8_t page);  ///< page is 1 … 15; 0 if unknown
+    uint8_t read(uint8_t page, uint16_t offset) const;
+    void write(uint8_t page, uint16_t offset, uint8_t value);
+    uint32_t crc(uint8_t page) const;
+    static bool stored();                ///< false on AVR: reads are zeros, writes are dropped
 private:
-    // ---- Framed protocol (v2) ----
-    void processFramedCommand(const uint8_t* payload, uint16_t length);
-    void sendFramedResponse(const uint8_t* data, uint16_t length);
-    void sendFramedError(uint8_t errorCode);
-
-    // ---- Legacy single-byte protocol ----
-    void processLegacyCommand(char cmd);
-    void sendLegacyResponse(const uint8_t* data, size_t length);
-    void sendLegacyString(const char* str);
-
-    // ---- Shared helpers ----
-    void sendResponse(const uint8_t* data, size_t length);  // kept for compat
-    void sendString(const char* str);                        // kept for compat
-
-    /**
-     * @brief Read exactly `count` bytes with a timeout
-     * @return true if all bytes were read before timeout
-     */
-    bool readBytes(uint8_t* buf, uint16_t count, uint32_t timeoutMs = 200);
-
-    /** @brief Standard CRC32 (Ethernet/ZIP polynomial) */
-    static uint32_t crc32(const uint8_t* data, size_t length);
+#if SIM_DETAILED
+    uint8_t data[3616] = {};
+    static uint16_t base(uint8_t page);
+#endif
 };
 
-#endif // SPEEDUINO_PROTOCOL_H
+struct ProtocolStats {
+    uint32_t commands = 0;
+    uint32_t framed = 0;
+    uint32_t realtimeReads = 0;   ///< 'A' and 'r' 0x30
+    uint32_t crcErrors = 0;
+    uint32_t unknown = 0;
+    uint32_t timeouts = 0;
+    uint32_t lastCommandMs = 0;
+    char lastCommand = 0;
+};
+
+class SpeeduinoProtocol {
+public:
+    SpeeduinoProtocol(ISerialInterface* serial, EngineSimulator* sim, ITimeProvider* time);
+    void begin();
+    /// Handle at most one command. Returns true if one was processed.
+    bool poll();
+    const ProtocolStats& stats() const { return stats_; }
+    /// Hold each reply until it could have crossed a 115200-baud UART (USB CDC
+    /// and TCP are much faster than the real board). On by default where the
+    /// line is not a real UART.
+    bool wirePacing = SIM_DETAILED != 0;
+
+    static uint32_t crc32Update(uint32_t crc, uint8_t byte);
+    static uint32_t crc32(const uint8_t* data, size_t length);
+
+private:
+    ISerialInterface* serial;
+    EngineSimulator* sim;
+    ITimeProvider* time;
+    TunePages pages;
+    ProtocolStats stats_;
+    uint8_t payload[FRAMED_PAYLOAD_MAX];
+
+    // Framed protocol
+    void handleFramed(uint16_t length);
+    void frameBegin(uint16_t length);
+    void frameByte(uint8_t b);
+    void frameBytes(const uint8_t* b, uint16_t n);
+    void frameString(const char* s);
+    void frameEnd();
+    void frameCode(uint8_t code);
+    uint32_t txCrc = 0;
+
+    // Legacy protocol
+    void handleLegacy(char cmd);
+    void sendRaw(const uint8_t* b, size_t n);
+    void sendRawString(const char* s);
+
+    void sendRealtime(uint16_t offset, uint16_t length, bool framed);
+    bool readExact(uint8_t* buf, uint16_t count, uint32_t timeoutMs);
+    int readByte(uint32_t timeoutMs);
+    void signatureSent();
+    void pace(uint32_t bytes);
+    uint32_t requestUs = 0;
+};

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#08090a">
+  <title>speeduino-serial-sim</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="bar">
+    <div class="brand"><span class="name">speeduino-serial-sim</span><span class="ver" id="version">—</span></div>
+    <div class="lamps" aria-label="Status">
+      <span class="lamp" id="lamp-engine" title="Engine running"><i></i>Engine</span>
+      <span class="lamp" id="lamp-sync" title="Crank/cam sync"><i></i>Sync</span>
+      <span class="lamp" id="lamp-client" title="A client is reading the Speeduino protocol"><i></i>Client</span>
+      <span class="lamp" id="lamp-link" title="Dashboard data stream"><i></i>Live</span>
+    </div>
+    <div class="clock"><span class="lbl" id="phase">—</span></div>
+  </header>
+
+  <section class="panel readout" aria-label="Primary readout">
+    <div class="cell wide"><span class="lbl">Engine speed</span><span class="val big"><b id="r-rpm">—</b><small>rpm</small></span><span class="sub" id="r-rpm-sub">&nbsp;</span></div>
+    <div class="cell"><span class="lbl">Speed</span><span class="val"><b id="r-kmh">—</b><small>km/h</small></span><span class="sub" id="r-gear">&nbsp;</span></div>
+    <div class="cell"><span class="lbl">Lap</span><span class="val"><b id="r-lap">—</b></span><span class="sub" id="r-lap-sub">&nbsp;</span></div>
+    <div class="cell"><span class="lbl">Throttle</span><span class="val"><b id="r-tps">—</b><small>%</small></span><span class="sub" id="r-map">&nbsp;</span></div>
+    <div class="cell"><span class="lbl">AFR</span><span class="val"><b id="r-afr">—</b></span><span class="sub" id="r-afr-sub">&nbsp;</span></div>
+    <div class="cell"><span class="lbl">Coolant</span><span class="val"><b id="r-clt">—</b><small>°C</small></span><span class="sub" id="r-clt-sub">&nbsp;</span></div>
+  </section>
+
+  <nav class="keys" aria-label="Mode">
+    <button class="key" data-mode="dash"><i class="led"></i>Dash</button>
+    <button class="key" data-mode="track"><i class="led"></i>Track</button>
+    <button class="key" data-mode="engine"><i class="led"></i>Engine</button>
+    <button class="key" data-mode="control"><i class="led"></i>Control</button>
+    <button class="key" data-mode="system"><i class="led"></i>System</button>
+    <span class="spacer"></span>
+    <span class="keygrp">
+      <button class="key small" id="k-theme" title="Light or dark theme"><i class="led on"></i><span id="k-theme-t">Dark</span></button>
+    </span>
+  </nav>
+
+  <main>
+    <section class="mode" id="mode-dash" hidden>
+      <article class="panel">
+        <h2>ECU status</h2>
+        <div class="lamps-row" id="dash-lamps"></div>
+      </article>
+      <div class="grid g-dash" id="dash-gauges"></div>
+    </section>
+
+    <section class="mode" id="mode-track" hidden>
+      <div class="grid g-engine">
+        <article class="panel">
+          <h2 id="track-name">Track <span class="note" id="track-note"></span></h2>
+          <canvas class="trackmap" id="track-map" aria-label="Track map"></canvas>
+          <p class="attrib" id="track-attrib"></p>
+        </article>
+        <article class="panel">
+          <h2>Laps <span class="note">this power cycle</span></h2>
+          <div class="table-wrap"><table class="tbl" id="lap-table">
+            <thead><tr><th>Lap</th><th class="n">Time</th><th class="n">Δ best</th><th>Kind</th></tr></thead><tbody></tbody>
+          </table></div>
+          <h2>Car</h2>
+          <dl class="kv" id="car-kv"></dl>
+        </article>
+        <article class="panel span2">
+          <h2>Speed trace <span class="note">km/h over distance · current lap against best</span></h2>
+          <canvas class="trace" id="speed-trace" aria-label="Speed trace"></canvas>
+        </article>
+      </div>
+    </section>
+
+    <section class="mode" id="mode-engine" hidden>
+      <div class="grid g-engine">
+        <article class="panel">
+          <h2>Realtime packet <span class="note">130 bytes as 'A' and 'r' 0x30 return them</span></h2>
+          <div class="cfg" id="packet-groups"></div>
+        </article>
+        <article class="panel">
+          <h2>Raw bytes <span class="note">decimal, by offset</span></h2>
+          <div class="hexdump" id="packet-raw"></div>
+          <h2>Status bits</h2>
+          <div class="flags" id="packet-flags"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="mode" id="mode-control" hidden>
+      <div class="grid g-cfg">
+        <article class="panel">
+          <h2>Engine and session</h2>
+          <div class="actions top">
+            <button class="key" data-action="start"><i class="led"></i>Start engine</button>
+            <button class="key" data-action="stop"><i class="led"></i>Stop engine</button>
+            <button class="key" data-action="session"><i class="led"></i>Go out</button>
+            <button class="key" data-action="pit"><i class="led"></i>Box this lap</button>
+            <button class="key" data-action="blip"><i class="led"></i>Blip throttle</button>
+          </div>
+          <p class="note" id="control-msg">&nbsp;</p>
+        </article>
+        <article class="panel">
+          <h2>Simulation <span class="note">applies immediately; key-on coolant at the next engine start</span></h2>
+          <form id="settings" class="form">
+            <label>Hot-lap pace <output id="pace-out">1.00</output><input type="range" name="pace" min="0.5" max="1.05" step="0.01"></label>
+            <label>Hot laps per run<input type="number" name="hotLaps" min="1" max="50"></label>
+            <label>Ambient °C<input type="number" name="ambientC" min="-20" max="45"></label>
+            <label>Coolant at key-on °C<input type="number" name="startCoolantC" min="-20" max="95"></label>
+            <label class="check"><input type="checkbox" name="autoStart"> Run sessions automatically</label>
+            <label class="check"><input type="checkbox" name="launchControl"> Launch control at pit exit</label>
+            <label class="check"><input type="checkbox" name="sensorNoise"> Sensor noise</label>
+            <div class="actions"><button class="key" type="submit"><i class="led on"></i>Apply</button></div>
+          </form>
+        </article>
+      </div>
+    </section>
+
+    <section class="mode" id="mode-system" hidden>
+      <div class="grid g-cfg">
+        <article class="panel">
+          <h2>Speeduino protocol</h2>
+          <dl class="kv" id="sys-protocol"></dl>
+          <h2>Device</h2>
+          <dl class="kv" id="sys-device"></dl>
+        </article>
+        <article class="panel">
+          <h2>Wi-Fi</h2>
+          <dl class="kv" id="sys-wifi"></dl>
+          <div class="actions top"><button class="key small" id="wifi-scan"><i class="led"></i>Scan networks</button></div>
+          <ul class="links" id="wifi-list"></ul>
+          <form id="wifi-form" class="form">
+            <label>Network<input name="ssid" maxlength="32" autocomplete="off" required></label>
+            <label>Password<input name="password" type="password" maxlength="64" autocomplete="new-password"></label>
+            <div class="actions">
+              <button class="key" type="submit"><i class="led on"></i>Join and restart</button>
+              <button class="key" type="button" id="wifi-reset"><i class="led"></i>Forget, use access point</button>
+            </div>
+          </form>
+          <p class="note" id="wifi-msg">&nbsp;</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot"><span id="foot-left">—</span><span id="foot-right"></span></footer>
+</body>
+</html>
