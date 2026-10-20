@@ -54,3 +54,4 @@ dist/
 tmp/
 temp/
 include/WebAssets.h
+release/

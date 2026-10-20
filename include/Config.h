@@ -12,7 +12,7 @@
 
 #include <stdint.h>
 
-#define FIRMWARE_VERSION "3.0.0"
+#define FIRMWARE_VERSION "3.0.1"
 
 // Identity of the emulated controller, as a DIY-EFI CORE4 on 202501.6 answers.
 #define SPEEDUINO_SIGNATURE "speeduino 202501"      // 'Q'

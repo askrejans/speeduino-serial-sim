@@ -182,6 +182,7 @@ private:
     bool       beginRequested;
     uint8_t    tx[512];
     size_t     txLen = 0;
+    uint32_t   lastAcceptCheck = 0;
 
     /**
      * @brief Check if WiFi is connected (AP or STA mode)
@@ -238,20 +239,27 @@ private:
             Serial.println("[WiFiSerial] Client disconnected");
         }
 
-        // Accept a new client if none is connected
-        if (!clientConnected) {
+        if (clientConnected && millis() - lastAcceptCheck < 20) return;
+        lastAcceptCheck = millis();
+        // A new connection takes over, as on a serial-over-TCP bridge:
+        // TunerStudio reconnects with a fresh socket while the old one may
+        // still look open, and must not be left unanswered.
 #if defined(ESP32) && defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-            WiFiClient newClient = server.accept();
+        WiFiClient newClient = server.accept();
 #else
-            WiFiClient newClient = server.available();
+        WiFiClient newClient = server.available();
 #endif
-            if (newClient) {
-                client = newClient;
-                client.setNoDelay(true);
-                clientConnected = true;
-                Serial.print("[WiFiSerial] Client connected from ");
-                Serial.println(client.remoteIP());
+        if (newClient) {
+            if (clientConnected) {
+                client.stop();
+                Serial.println("[WiFiSerial] Previous client replaced");
             }
+            client = newClient;
+            client.setNoDelay(true);
+            clientConnected = true;
+            txLen = 0;
+            Serial.print("[WiFiSerial] Client connected from ");
+            Serial.println(client.remoteIP());
         }
     }
 };

@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.0.1
+
+### Fixed
+- Wi-Fi serial (TCP 5000): a new connection now replaces the previous one, as
+  on a serial-over-TCP bridge. TunerStudio reconnects with a fresh socket
+  while the old one still looks open; 3.0.0 kept serving the old socket, so
+  page reads timed out. Verified with TunerStudio over Wi-Fi.
+- Wi-Fi serial: replies are sent in one write (byte-by-byte writes cost about
+  250 ms per reply over Wi-Fi).
+
 ## 3.0.0
 
 ### Contract changes

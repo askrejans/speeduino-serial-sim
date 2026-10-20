@@ -10,6 +10,8 @@ Use it to develop and test dashboards, loggers, gateways (such as
 [ecu-to-mqtt](https://github.com/askrejans/ecu-to-mqtt)) and TunerStudio
 setups on the bench.
 
+<img width="1536" height="1024" alt="speeduino-serial-sim" src="https://github.com/user-attachments/assets/37d17935-6fb9-4c8f-ba68-a8355210c294" />
+
 ## What it does
 
 - **Identifies as a real controller.** `Q` → `speeduino 202501`, `S` →
@@ -78,6 +80,18 @@ pio run -e native
 Options: `--bind`, `--port`, `--pty`, `--speed`, `--pace 0.5…1.05`,
 `--laps N`, `--ambient C`, `--coolant C`, `--no-launch`, `--no-noise`,
 `--quiet`.
+
+## Screenshots
+
+Web dashboard on an ESP32-S3 during a session (dark theme):
+
+| Dash | Track |
+|---|---|
+| ![Dash: ECU status lamps and gauges](docs/screenshots/dash.jpg) | ![Track: Biķernieki map, laps and speed trace](docs/screenshots/track.jpg) |
+| **Engine** | **Control** |
+| ![Engine: decoded packet, raw bytes, status bits](docs/screenshots/engine.jpg) | ![Control: engine, session and simulation settings](docs/screenshots/control.jpg) |
+| **System** | **TunerStudio** |
+| ![System: protocol counters, device, Wi-Fi](docs/screenshots/system.jpg) | <img alt="TunerStudio connected to the simulator" src="https://github.com/user-attachments/assets/e28e141e-77c1-4093-82c8-48897f7d8c04" /> |
 
 ## Wi-Fi and the web dashboard
 

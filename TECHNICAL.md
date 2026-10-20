@@ -142,7 +142,8 @@ per loop; replies are streamed.
   request-reply (UART pacing plus the Wi-Fi round trip, as a real Wi-Fi
   serial bridge). Writing replies byte by byte had cost 252 ms (one TCP
   segment per byte); the adapter now sends each reply in one write.
-* Builds: see the README board table (all environments build).
+* TunerStudio (Speeduino 202501 INI) over Wi-Fi TCP: connects, reads all pages, streams realtime data (~28 reads/s, no CRC errors or timeouts).
+* Builds: every environment (AVR and ESP8266 toolchains are x86-only on macOS; built in an arm64 Linux container).
 
 ## 6. Known limitations
 
