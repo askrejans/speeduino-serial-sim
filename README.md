@@ -79,7 +79,16 @@ pio run -e native
 
 Options: `--bind`, `--port`, `--pty`, `--speed`, `--pace 0.5…1.05`,
 `--laps N`, `--ambient C`, `--coolant C`, `--no-launch`, `--no-noise`,
-`--quiet`.
+`--quiet`, `--gps-port N`.
+
+The car's GPS too: `--gps-port 5001` serves NMEA (`$GPRMC`, `$GPGGA`, 10 Hz)
+of its place on the lap, in step with the ECU. For a whole G86 session:
+
+```bash
+.pio/build/native/program --gps-port 5001
+ECU_TO_MQTT_CONNECTION_TYPE=tcp ECU_TO_MQTT_TCP_HOST=127.0.0.1 ECU_TO_MQTT_TCP_PORT=5000 ecu-to-mqtt
+GPS_TO_MQTT_CONNECTION_TYPE=tcp GPS_TO_MQTT_TCP_HOST=127.0.0.1 GPS_TO_MQTT_TCP_PORT=5001 gps-to-mqtt
+```
 
 ## Screenshots
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.0
+
+### Added
+- Desktop simulator: `--gps-port N` serves the car's GPS as NMEA 0183
+  (`$GPRMC` + `$GPGGA`, 10 Hz) on a second TCP port: its position, speed and
+  course on the Biķernieki lap, in step with the ECU. Point gps-to-mqtt (TCP
+  source) or any NMEA client at it for a complete, matching ECU + GPS session.
+
 ## 3.0.1
 
 ### Fixed

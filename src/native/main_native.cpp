@@ -6,6 +6,7 @@
  *   .pio/build/native/program                    # TCP 127.0.0.1:5000
  *   .pio/build/native/program --pty              # prints /dev/ttys…
  *   .pio/build/native/program --speed 10 --laps 3 --pace 0.95
+ *   .pio/build/native/program --gps-port 5001    # also NMEA GPS of the car at 10 Hz
  */
 #if defined(NATIVE_SIM) && !defined(ARDUINO) && !defined(UNIT_TEST)
 
@@ -13,7 +14,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "EngineSimulator.h"
+#include "Nmea.h"
+#include "Track.h"
 #include "NativeAdapters.h"
 #include "SpeeduinoProtocol.h"
 
@@ -26,6 +30,7 @@ static void usage() {
             "  --bind ADDR      TCP bind address (default 127.0.0.1)\n"
             "  --port N         TCP port (default 5000)\n"
             "  --pty            serve on a pseudo-terminal instead of TCP\n"
+            "  --gps-port N     also serve the car's GPS as NMEA on this TCP port (10 Hz)\n"
             "  --speed X        run X times faster than real time (default 1)\n"
             "  --pace P         hot-lap pace, 0.5 … 1.05 of the grip envelope (default 1.0)\n"
             "  --laps N         hot laps per run (default 5)\n"
@@ -38,7 +43,7 @@ static void usage() {
 
 int main(int argc, char** argv) {
     const char* bind = "127.0.0.1";
-    uint16_t port = 5000;
+    uint16_t port = 5000, gpsPort = 0;
     bool pty = false, quiet = false;
     double speed = 1.0;
     SimSettings settings;
@@ -51,6 +56,7 @@ int main(int argc, char** argv) {
         if (!strcmp(a, "--bind")) bind = next();
         else if (!strcmp(a, "--port")) port = (uint16_t)atoi(next());
         else if (!strcmp(a, "--pty")) pty = true;
+        else if (!strcmp(a, "--gps-port")) gpsPort = (uint16_t)atoi(next());
         else if (!strcmp(a, "--speed")) speed = atof(next());
         else if (!strcmp(a, "--pace")) settings.pace = (float)atof(next());
         else if (!strcmp(a, "--laps")) settings.hotLaps = (uint8_t)atoi(next());
@@ -82,6 +88,12 @@ int main(int argc, char** argv) {
         printf("listening on tcp://%s:%u\n", bind, port);
         line = tcp;
     }
+    TcpSerial* gps = nullptr;
+    if (gpsPort) {
+        gps = new TcpSerial(bind, gpsPort);
+        if (!gps->listening()) return 1;
+        printf("GPS (NMEA, 10 Hz) on tcp://%s:%u\n", bind, gpsPort);
+    }
     fflush(stdout);
 
     EngineSimulator sim(&clock, &rng);
@@ -90,11 +102,38 @@ int main(int argc, char** argv) {
     SpeeduinoProtocol protocol(line, &sim, &clock);
     protocol.begin();
 
-    uint32_t lastPrint = 0;
+    uint32_t lastPrint = 0, lastFix = 0;
     while (!stop) {
         sim.update();
         bool busy = protocol.poll();
         uint32_t now = clock.millis();
+        if (gps && now - lastFix >= 100) {
+            lastFix = now;
+            gps->isReady();  // accepts a waiting client
+            if (gps->connected()) {
+                const Telemetry& t = sim.telemetry();
+                float east, north;
+                track::position(t.distanceM, east, north);
+                nmea::Fix f = {};
+                nmea::toLatLon(track::originLat(), track::originLon(), east, north, f.lat, f.lon);
+                f.speedKmh = t.speedKmh;
+                f.headingDeg = track::heading(t.distanceM) * 57.2957795f;
+                f.altitudeM = 76.0f;
+                struct timespec ts;
+                clock_gettime(CLOCK_REALTIME, &ts);
+                time_t secs = ts.tv_sec;
+                struct tm utc;
+                gmtime_r(&secs, &utc);
+                f.utcSeconds = (uint32_t)(utc.tm_hour * 3600 + utc.tm_min * 60 + utc.tm_sec);
+                f.utcMs = (uint16_t)(ts.tv_nsec / 1000000);
+                f.day = (uint16_t)utc.tm_mday, f.month = (uint16_t)(utc.tm_mon + 1), f.year = (uint16_t)(utc.tm_year + 1900);
+                f.satellites = 12;
+                f.hdop = 0.8f;
+                char out[256];
+                size_t n = nmea::sentences(f, out, sizeof(out));
+                gps->write((const uint8_t*)out, n);
+            }
+        }
         if (!quiet && now - lastPrint >= 1000) {
             lastPrint = now;
             const EngineStatus& s = sim.getStatus();
@@ -109,6 +148,7 @@ int main(int argc, char** argv) {
     fprintf(stderr, "\n");
     delete tcp;
     delete term;
+    delete gps;
     return 0;
 }
 

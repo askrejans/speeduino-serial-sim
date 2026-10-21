@@ -5,6 +5,7 @@
  *   pio test -e native
  */
 #include <unity.h>
+#include <math.h>
 #include <string.h>
 #include <deque>
 #include <string>
@@ -14,6 +15,7 @@
 #include "Track.h"
 #include "Snapshot.h"
 #include "core4_capture.h"
+#include "Nmea.h"
 
 // ---------------------------------------------------------------- fakes
 
@@ -368,8 +370,47 @@ void test_web_documents_fit_their_buffers() {
     TEST_ASSERT_EQUAL(0, liveJson(buf, 40, r.sim));  // overflow reports 0, never truncated JSON
 }
 
+// ---------------------------------------------------------------- GPS (NMEA)
+
+void test_nmea_sentences() {
+    // a known sentence: the checksum of "GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,," is 0x47
+    TEST_ASSERT_EQUAL_HEX8(0x47, nmea::checksum("GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,"));
+    nmea::Fix f = {};
+    f.lat = 56.9636272;
+    f.lon = 24.2251375;
+    f.speedKmh = 185.2f;
+    f.headingDeg = -90;  // west
+    f.altitudeM = 76;
+    f.utcSeconds = 12 * 3600 + 34 * 60 + 56;
+    f.utcMs = 780;
+    f.day = 21, f.month = 10, f.year = 2026;
+    f.satellites = 12;
+    f.hdop = 0.8f;
+    char out[256];
+    size_t n = nmea::sentences(f, out, sizeof(out));
+    TEST_ASSERT_EQUAL(strlen(out), n);
+    std::string s(out);
+    TEST_ASSERT_EQUAL(0u, s.find("$GPRMC,123456.78,A,5657.81763,N,02413.50825,E,100.00,270.0,211026,,,A*"));
+    TEST_ASSERT_TRUE(s.find("\r\n$GPGGA,123456.78,5657.81763,N,02413.50825,E,1,12,0.8,76.0,M,") != std::string::npos);
+    // each sentence carries a valid checksum
+    size_t at = 0;
+    while ((at = s.find('$', at)) != std::string::npos) {
+        size_t star = s.find('*', at);
+        unsigned sum = 0;
+        sscanf(s.c_str() + star + 1, "%2X", &sum);
+        TEST_ASSERT_EQUAL_HEX8(nmea::checksum(s.substr(at + 1, star - at - 1).c_str()), sum);
+        at = star;
+    }
+    // metres east/north to degrees: 1112 m north ≈ 0.01°
+    double la, lo;
+    nmea::toLatLon(56.96, 24.22, 0, 1113.2f, la, lo);
+    TEST_ASSERT_TRUE(fabs(la - 56.97) < 1e-5);
+    TEST_ASSERT_TRUE(fabs(lo - 24.22) < 1e-9);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_nmea_sentences);
     RUN_TEST(test_setters_encode_firmware_units);
     RUN_TEST(test_crc32_reference_vector);
     RUN_TEST(test_legacy_identity_matches_the_core4);
